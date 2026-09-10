@@ -1,0 +1,7 @@
+{
+  "name": "Duarte Finanças - Gestão Compartilhada",
+  "description": "Webapp completo de finanças para casal com conta única unificada, scanner inteligente de cupons via IA, metas financeiras e conciliação de faturas.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
