@@ -137,3 +137,23 @@ export interface CategoryBudget {
   icone: string;
   isCarro?: boolean;
 }
+
+export interface FuelLog {
+  id: string;
+  data: string; // YYYY-MM-DD or YYYY-MM-DD HH:mm
+  posto: string; // Nome do Posto / Estabelecimento
+  combustivel: 'Gasolina Comum' | 'Gasolina Aditivada' | 'Etanol' | 'Diesel' | string;
+  valorTotal: number; // R$ total pago
+  precoLitro: number; // R$/L
+  litros: number; // Litros abastecidos
+  kmAtual: number; // Odômetro atual do carro
+  kmRodados?: number; // km percorridos desde o último abastecimento
+  consumoKmPorLitro?: number; // Eficiência: kmRodados / litros
+  custoPorKm?: number; // Custo do combustível por km: valorTotal / kmRodados
+  pagoPor?: 'Guilherme' | 'Mariana' | 'Casal';
+  formaPagamento?: string;
+  comprovanteUrl?: string; // Imagem do comprovante / cupom fiscal
+  comprovanteNome?: string;
+  observacoes?: string;
+  origem?: 'manual' | 'comprovante_ia';
+}

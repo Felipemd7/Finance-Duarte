@@ -60,6 +60,7 @@ interface ShoppingListItem {
 export const GoalsView: React.FC<GoalsViewProps> = ({
   goals = [],
   onAddGoal,
+  onUpdateGoal,
 }) => {
   // Mobile Top Switcher: 'compras' (Lista de Compras) vs 'carro' (Metas & Carro)
   const [activeSubTab, setActiveSubTab] = useState<'compras' | 'carro'>('compras');
@@ -828,6 +829,9 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         onToggleReclassification={handleToggleReclassification}
         onShowToast={showToast}
         onOpenAddGoal={() => setShowAddGoalModal(true)}
+        goals={goals}
+        onAddGoal={onAddGoal}
+        onUpdateGoal={onUpdateGoal}
       />
       {/* ========================================================================= */}
       {/* MODAL: Nova Meta Financeira do Casal                                      */}

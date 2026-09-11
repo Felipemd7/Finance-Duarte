@@ -712,6 +712,196 @@ INSTRUÇÕES RIGOROSAS:
   }
 });
 
+// 2.1 Multimodal OCR via Gemini specifically for Gas Station Fuel Receipts (Comprovante de Posto de Combustível)
+app.post('/api/scan-fuel-receipt', async (req, res) => {
+  try {
+    const { imageBase64, mimeType = 'image/jpeg', mockSample } = req.body;
+
+    if (mockSample === 'shell') {
+      return res.json({
+        success: true,
+        source: 'sample-shell',
+        data: {
+          posto: 'Auto Posto Shell Portal da Barra',
+          combustivel: 'Gasolina Aditivada',
+          valorTotal: 279.80,
+          precoLitro: 5.95,
+          litros: 47.03,
+          data: '2026-03-11',
+          km: 42260,
+          numeroCupom: 'NFC-e #284102',
+          formaPagamento: 'Mastercard Crédito',
+          cnpj: '33.241.890/0001-12',
+          endereco: 'Av. das Américas, 3400 - Barra da Tijuca, RJ',
+          observacoes: 'Shell V-Power • Bico 04',
+        },
+      });
+    }
+
+    if (mockSample === 'ipiranga') {
+      return res.json({
+        success: true,
+        source: 'sample-ipiranga',
+        data: {
+          posto: 'Posto Ipiranga Américas Sul',
+          combustivel: 'Gasolina Comum',
+          valorTotal: 265.50,
+          precoLitro: 5.79,
+          litros: 45.85,
+          data: '2026-03-09',
+          km: 41740,
+          numeroCupom: 'SAT #94120',
+          formaPagamento: 'PIX NuBank',
+          cnpj: '18.492.381/0002-54',
+          endereco: 'Av. das Américas, 7500 - Rio de Janeiro, RJ',
+          observacoes: 'Gasolina Comum • Km Vantagens',
+        },
+      });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      // Fallback if API key is not yet set
+      return res.json({
+        success: true,
+        source: 'simulated-ocr',
+        notice: 'Gemini API key não configurada no servidor. Retornando análise estruturada de demonstração.',
+        data: {
+          posto: 'Posto Petrobras BR Linha Amarela',
+          combustivel: 'Gasolina Comum',
+          valorTotal: 260.00,
+          precoLitro: 5.78,
+          litros: 44.98,
+          data: new Date().toISOString().slice(0, 10),
+          km: null,
+          numeroCupom: 'NFC-e #' + Math.floor(100000 + Math.random() * 900000),
+          formaPagamento: 'Cartão de Crédito',
+          cnpj: '02.431.902/0001-49',
+          endereco: 'Av. Governador Carlos Lacerda, 4500 - RJ',
+          observacoes: 'Leitura IA: informe o odômetro (KM) para cálculo exato de consumo.',
+        },
+      });
+    }
+
+    // Clean base64 string robustly
+    let cleanBase64 = imageBase64;
+    let detectedMime = (mimeType || 'image/jpeg').toLowerCase();
+
+    if (typeof imageBase64 === 'string' && imageBase64.includes(',')) {
+      const splitIdx = imageBase64.indexOf(',');
+      const header = imageBase64.slice(0, splitIdx);
+      cleanBase64 = imageBase64.slice(splitIdx + 1);
+      const mimeMatch = header.match(/data:([^;]+);/);
+      if (mimeMatch && mimeMatch[1]) {
+        detectedMime = mimeMatch[1].toLowerCase();
+      }
+    }
+
+    let validMime = 'image/jpeg';
+    if (detectedMime.includes('png')) validMime = 'image/png';
+    else if (detectedMime.includes('webp')) validMime = 'image/webp';
+    else if (detectedMime.includes('pdf')) validMime = 'application/pdf';
+
+    const prompt = `Você é um especialista em OCR e auditoria fiscal de comprovantes e cupons fiscais (NFC-e, SAT, CF-e ou filipetas de cartão) de POSTOS DE COMBUSTÍVEL no Brasil.
+Analise a imagem deste comprovante de abastecimento e extraia com máxima exatidão:
+
+1. posto: Nome fantasia do posto ou rede (ex: "Posto Shell", "Posto Ipiranga", "Posto Petrobras BR", "Auto Posto...", etc.)
+2. combustivel: Tipo de combustível ("Gasolina Comum", "Gasolina Aditivada", "Etanol", "Diesel")
+3. valorTotal: Valor total pago em reais (float numérico, ex: 250.00)
+4. precoLitro: Preço por litro cobrado (float numérico, ex: 5.89). Se não estiver explícito, divida o valorTotal pelos litros.
+5. litros: Quantidade de litros abastecidos (float numérico, ex: 42.44). Se não estiver explícito, divida o valorTotal pelo precoLitro.
+6. data: Data do abastecimento no formato "YYYY-MM-DD"
+7. km: Quilometragem do veículo se constar anotada à mão pelo frentista ou no campo de placa/odômetro da NFC-e (número inteiro, ex: 41250, ou null se não houver)
+8. numeroCupom: Número da NFC-e, SAT ou NSU do comprovante
+9. formaPagamento: Forma de pagamento identificada (ex: "Cartão de Crédito", "PIX", "Débito", "Dinheiro")
+10. cnpj: CNPJ do posto se legível
+11. endereco: Endereço do posto se constar
+
+Retorne APENAS um JSON estrito no seguinte formato:
+{
+  "posto": "string",
+  "combustivel": "string",
+  "valorTotal": number,
+  "precoLitro": number,
+  "litros": number,
+  "data": "string",
+  "km": number | null,
+  "numeroCupom": "string",
+  "formaPagamento": "string",
+  "cnpj": "string",
+  "endereco": "string"
+}`;
+
+    const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    let parsedData: any = null;
+    let modelUsed = '';
+    let lastError: any = null;
+
+    for (const candidate of candidateModels) {
+      try {
+        console.log(`[Gemini Fuel OCR] Tentando analisar comprovante de posto com modelo: ${candidate}...`);
+        const response = await ai.models.generateContent({
+          model: candidate,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: validMime,
+                    data: cleanBase64,
+                  },
+                },
+                { text: prompt },
+              ],
+            },
+          ],
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.1,
+          },
+        });
+
+        if (response && response.text) {
+          let raw = response.text.trim();
+          if (raw.startsWith('```')) {
+            raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+          }
+          parsedData = JSON.parse(raw);
+          modelUsed = candidate;
+          console.log(`[Gemini Fuel OCR] Sucesso com ${candidate}! Posto: "${parsedData.posto}", Total: R$ ${parsedData.valorTotal}, Litros: ${parsedData.litros}, Preço/L: R$ ${parsedData.precoLitro}`);
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.error(`[Gemini Fuel OCR Error on ${candidate}]:`, err?.message || err);
+        continue;
+      }
+    }
+
+    if (!parsedData) {
+      return res.status(200).json({
+        success: false,
+        error: 'Não foi possível ler com nitidez os dados do abastecimento. Você pode preencher manualmente os valores.',
+        details: lastError?.message,
+      });
+    }
+
+    return res.json({
+      success: true,
+      source: modelUsed,
+      data: parsedData,
+    });
+  } catch (err: any) {
+    console.error('[scan-fuel-receipt critical error]:', err?.message || err);
+    return res.status(200).json({
+      success: false,
+      error: 'Erro no processamento do comprovante de combustível.',
+      details: err?.message,
+    });
+  }
+});
+
 // 3. Shopping List REST API
 app.get('/api/shopping-list', (_req, res) => {
   res.json({ items: shoppingListStore });
