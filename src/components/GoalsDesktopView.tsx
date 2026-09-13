@@ -50,6 +50,7 @@ export interface BudgetCategoryItem {
   limit: number;
   icon: string;
   note: string;
+  alertPercent?: number;
   type: 'expense' | 'saving';
   isCustom?: boolean;
 }
@@ -81,46 +82,51 @@ const DEFAULT_CATEGORIES: BudgetCategoryItem[] = [
   {
     id: 'supermercado',
     name: 'Supermercado & Feira',
-    spent: 3280,
-    limit: 2800,
+    spent: 0,
+    limit: 2500,
     icon: 'cart',
-    note: 'Alerta: 3 compras não essenciais',
+    note: '',
+    alertPercent: 85,
     type: 'expense',
   },
   {
     id: 'lazer',
     name: 'Lazer & Gastronomia',
-    spent: 1120,
+    spent: 0,
     limit: 1200,
     icon: 'utensils',
-    note: 'Restam 12 dias no ciclo',
+    note: '',
+    alertPercent: 85,
     type: 'expense',
   },
   {
     id: 'combustivel',
     name: 'Combustível Mensal',
-    spent: 680,
+    spent: 0,
     limit: 800,
     icon: 'fuel',
-    note: 'Consumo regular e controlado',
+    note: '',
+    alertPercent: 85,
     type: 'expense',
   },
   {
     id: 'farmacia',
     name: 'Farmácia & Cuidados',
-    spent: 380,
+    spent: 0,
     limit: 450,
     icon: 'pill',
-    note: 'Sem imprevistos médicos',
+    note: '',
+    alertPercent: 85,
     type: 'expense',
   },
   {
     id: 'reserva',
     name: 'Reserva & Investimentos',
-    spent: 4329.6,
-    limit: 4000,
+    spent: 0,
+    limit: 3500,
     icon: 'piggy',
-    note: 'Meta de poupança atingida!',
+    note: '',
+    alertPercent: 85,
     type: 'saving',
   },
 ];
@@ -243,7 +249,28 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   // Budget Categories State
   const [categories, setCategories] = useState<BudgetCategoryItem[]>(() => {
     const saved = localStorage.getItem('duarte_desktop_categories');
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    if (saved) {
+      try {
+        const parsed: BudgetCategoryItem[] = JSON.parse(saved);
+        // Higieniza qualquer resquício de texto estático mockado
+        return parsed.map((c) => ({
+          ...c,
+          alertPercent: c.alertPercent || 85,
+          note:
+            c.note &&
+            (c.note.includes('não essenciais') ||
+              c.note.includes('dias no ciclo') ||
+              c.note.includes('regular e controlado') ||
+              c.note.includes('imprevistos médicos') ||
+              c.note.includes('atingida!'))
+              ? ''
+              : c.note || '',
+        }));
+      } catch {
+        return DEFAULT_CATEGORIES;
+      }
+    }
+    return DEFAULT_CATEGORIES;
   });
 
   useEffect(() => {
@@ -290,7 +317,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   // Forms State for Category
   const [catName, setCatName] = useState('');
   const [catLimit, setCatLimit] = useState('');
-  const [catSpent, setCatSpent] = useState('');
+  const [catAlertPercent, setCatAlertPercent] = useState('85');
   const [catNote, setCatNote] = useState('');
   const [catIcon, setCatIcon] = useState('cart');
   const [catType, setCatType] = useState<'expense' | 'saving'>('expense');
@@ -310,8 +337,8 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     setEditingCategory(cat);
     setCatName(cat.name);
     setCatLimit(cat.limit.toString());
-    setCatSpent(cat.spent.toString());
-    setCatNote(cat.note);
+    setCatAlertPercent((cat.alertPercent || 85).toString());
+    setCatNote(cat.note || '');
     setCatIcon(cat.icon);
     setCatType(cat.type);
   };
@@ -322,6 +349,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     if (!editingCategory) return;
 
     const numLimit = parseFloat(catLimit.replace(',', '.')) || 0;
+    const numAlert = parseInt(catAlertPercent, 10) || 85;
     const currentRealSpent = calculateRealSpent(editingCategory);
 
     setCategories((prev) =>
@@ -331,6 +359,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
               ...c,
               name: catName.trim() || c.name,
               limit: numLimit,
+              alertPercent: numAlert,
               spent: currentRealSpent,
               note: catNote.trim(),
               icon: catIcon,
@@ -357,7 +386,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const handleOpenNewCategory = () => {
     setCatName('');
     setCatLimit('1000');
-    setCatSpent('0');
+    setCatAlertPercent('85');
     setCatNote('');
     setCatIcon('cart');
     setCatType('expense');
@@ -370,14 +399,15 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     if (!catName.trim()) return;
 
     const numLimit = parseFloat(catLimit.replace(',', '.')) || 1000;
-    const numSpent = parseFloat(catSpent.replace(',', '.')) || 0;
+    const numAlert = parseInt(catAlertPercent, 10) || 85;
 
     const newCat: BudgetCategoryItem = {
       id: 'cat-' + Date.now(),
       name: catName.trim(),
       limit: numLimit,
-      spent: numSpent,
-      note: catNote.trim() || 'Criado pelo casal Duarte',
+      alertPercent: numAlert,
+      spent: 0,
+      note: catNote.trim(),
       icon: catIcon,
       type: catType,
       isCustom: true,
@@ -551,9 +581,21 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
               const realSpent = calculateRealSpent(cat);
               const pct = Math.round((realSpent / (cat.limit || 1)) * 100);
               const diff = realSpent - cat.limit;
+              const threshold = cat.alertPercent || 85;
               const isExceeded = cat.type === 'expense' && realSpent > cat.limit;
-              const isWarning = cat.type === 'expense' && !isExceeded && pct >= 90;
+              const isWarning = cat.type === 'expense' && !isExceeded && pct >= threshold;
               const isSavingOver = cat.type === 'saving' && realSpent >= cat.limit;
+
+              // Mensagem dinâmica de alerta e status baseada na realidade dos gastos
+              const dynamicStatusText = isExceeded
+                ? `Teto excedido em ${formatBRL(diff)}`
+                : isWarning
+                ? `Alerta: ${pct}% atingido (Gatilho ${threshold}%)`
+                : cat.type === 'saving'
+                ? (isSavingOver ? `Meta atingida (${formatBRL(realSpent)})` : `Poupança em andamento (${pct}%)`)
+                : `${formatBRL(Math.abs(diff))} livres no mês`;
+
+              const footerText = cat.note ? `${cat.note} • ${dynamicStatusText}` : dynamicStatusText;
 
               // Styles based on status
               let badgeColor = 'bg-[#dcfce7] text-[#006948]';
@@ -648,7 +690,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                       ) : (
                         <CheckCircle2 className="w-3 h-3 text-[#006948] shrink-0" />
                       )}
-                      <span className="truncate">{cat.note || 'Teto planejado'}</span>
+                      <span className="truncate" title={footerText}>{footerText}</span>
                     </div>
                   </div>
                 </div>
@@ -1205,17 +1247,40 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                 </span>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                  Observação / Alerta
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Alerta: 3 compras não essenciais"
-                  value={catNote}
-                  onChange={(e) => setCatNote(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Gatilho de Alerta (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="50"
+                      max="100"
+                      step="5"
+                      value={catAlertPercent}
+                      onChange={(e) => setCatAlertPercent(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs font-bold text-[#0b1c30] focus:outline-hidden focus:border-[#006948]"
+                      required
+                    />
+                    <span className="absolute right-3 top-2 text-xs font-bold text-[#565e74]">%</span>
+                  </div>
+                  <span className="text-[10px] text-[#565e74] mt-0.5 block">Disparar aviso ao atingir esta %</span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Lembrete / Nota (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Priorizar compras no atacado"
+                    value={catNote}
+                    onChange={(e) => setCatNote(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-hidden focus:border-[#006948]"
+                  />
+                  <span className="text-[10px] text-[#565e74] mt-0.5 block">Lembrete pessoal para o casal</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1349,17 +1414,39 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                 💡 <strong>Gasto Automático:</strong> Os gastos desta categoria serão calculados automaticamente à medida que novas despesas forem lançadas no extrato.
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                  Observação / Subtítulo
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Vacinas e ração mensal"
-                  value={catNote}
-                  onChange={(e) => setCatNote(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Gatilho de Alerta (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="50"
+                      max="100"
+                      step="5"
+                      value={catAlertPercent}
+                      onChange={(e) => setCatAlertPercent(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs font-bold text-[#0b1c30] focus:outline-hidden focus:border-[#006948]"
+                    />
+                    <span className="absolute right-3 top-2 text-xs font-bold text-[#565e74]">%</span>
+                  </div>
+                  <span className="text-[10px] text-[#565e74] mt-0.5 block">Disparar aviso ao atingir %</span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Lembrete / Nota (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Compras planejadas para o mês"
+                    value={catNote}
+                    onChange={(e) => setCatNote(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-hidden focus:border-[#006948]"
+                  />
+                  <span className="text-[10px] text-[#565e74] mt-0.5 block">Lembrete opcional do casal</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
