@@ -255,6 +255,8 @@ export default function App() {
         {currentTab === 'metas' && (
           <GoalsView
             goals={goals}
+            transactions={transactions}
+            selectedMonth={selectedMonth}
             onAddGoal={handleAddGoal}
             onUpdateGoal={handleUpdateGoal}
           />

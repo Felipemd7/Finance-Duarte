@@ -35,11 +35,13 @@ import {
   Code2,
   Terminal,
 } from 'lucide-react';
-import { FinancialGoal } from '../types';
+import { FinancialGoal, Transaction } from '../types';
 import { formatBRL } from '../utils/formatters';
 
 interface GoalsViewProps {
   goals?: FinancialGoal[];
+  transactions?: Transaction[];
+  selectedMonth?: string;
   onAddGoal?: (goal: FinancialGoal) => void;
   onUpdateGoal?: (goal: FinancialGoal) => void;
 }
@@ -59,6 +61,8 @@ interface ShoppingListItem {
 
 export const GoalsView: React.FC<GoalsViewProps> = ({
   goals = [],
+  transactions = [],
+  selectedMonth = 'Março 2026',
   onAddGoal,
   onUpdateGoal,
 }) => {
@@ -830,6 +834,8 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         onShowToast={showToast}
         onOpenAddGoal={() => setShowAddGoalModal(true)}
         goals={goals}
+        transactions={transactions}
+        selectedMonth={selectedMonth}
         onAddGoal={onAddGoal}
         onUpdateGoal={onUpdateGoal}
       />

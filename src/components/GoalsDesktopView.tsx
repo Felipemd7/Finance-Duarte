@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShoppingCart,
   Car,
@@ -38,7 +38,7 @@ import {
   Shield,
   Percent,
 } from 'lucide-react';
-import { FinancialGoal, FuelLog } from '../types';
+import { FinancialGoal, FuelLog, Transaction } from '../types';
 import { INITIAL_FUEL_LOGS } from '../data/initialData';
 import { formatBRL } from '../utils/formatters';
 import { FuelManagementSection } from './FuelManagementSection';
@@ -70,6 +70,8 @@ interface GoalsDesktopViewProps {
   onShowToast: (msg: string) => void;
   onOpenAddGoal: () => void;
   goals?: FinancialGoal[];
+  transactions?: Transaction[];
+  selectedMonth?: string;
   onAddGoal?: (goal: FinancialGoal) => void;
   onUpdateGoal?: (goal: FinancialGoal) => void;
   onDeleteGoal?: (id: string) => void;
@@ -163,7 +165,81 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   isReclassified,
   onToggleReclassification,
   onShowToast,
+  goals = [],
+  transactions = [],
+  selectedMonth = 'Março 2026',
 }) => {
+  // Converte nome do mês para código 'YYYY-MM'
+  const activeMonthCode = useMemo(() => {
+    if (!selectedMonth) return '2026-03';
+    const match = selectedMonth.match(/(\d{4})-(\d{2})/);
+    if (match) return `${match[1]}-${match[2]}`;
+    const monthsMap: Record<string, string> = {
+      janeiro: '2026-01',
+      fevereiro: '2026-02',
+      março: '2026-03',
+      marco: '2026-03',
+      abril: '2026-04',
+      maio: '2026-05',
+      junho: '2026-06',
+      julho: '2026-07',
+      agosto: '2026-08',
+      setembro: '2026-09',
+      outubro: '2026-10',
+      novembro: '2026-11',
+      dezembro: '2026-12',
+    };
+    const lower = selectedMonth.toLowerCase();
+    for (const [name, code] of Object.entries(monthsMap)) {
+      if (lower.includes(name)) return code;
+    }
+    return '2026-03';
+  }, [selectedMonth]);
+
+  // Transações do mês ativo
+  const monthTransactions = useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+    return transactions.filter(
+      (t) => (t.mesReferencia === activeMonthCode || (t.data && t.data.startsWith(activeMonthCode))) && t.tipo === 'despesa'
+    );
+  }, [transactions, activeMonthCode]);
+
+  // Cálculo 100% automático do gasto real da categoria no banco Supabase
+  const calculateRealSpent = useCallback((cat: BudgetCategoryItem): number => {
+    if (!monthTransactions || monthTransactions.length === 0) return cat.spent;
+    const nameLower = (cat.name + ' ' + (cat.id || '')).toLowerCase();
+
+    if (nameLower.includes('reserva') || nameLower.includes('investimento') || nameLower.includes('poupança') || cat.type === 'saving') {
+      return cat.spent;
+    }
+
+    const filtered = monthTransactions.filter((t) => {
+      const sub = (t.subcategoria || '').toLowerCase();
+      const catName = (t.categoria || '').toLowerCase();
+
+      if (nameLower.includes('supermercado') || nameLower.includes('feira')) {
+        return sub.includes('supermercado') || sub.includes('feira') || sub.includes('alimento');
+      }
+      if (nameLower.includes('lazer') || nameLower.includes('gastronomia') || nameLower.includes('restaurante')) {
+        return sub.includes('lazer') || sub.includes('restaurante') || sub.includes('jantar');
+      }
+      if (nameLower.includes('combustivel') || nameLower.includes('combustível') || nameLower.includes('posto')) {
+        return sub.includes('combust');
+      }
+      if (nameLower.includes('farmacia') || nameLower.includes('farmácia') || nameLower.includes('cuidados') || nameLower.includes('saude') || nameLower.includes('saúde')) {
+        return sub.includes('farm') || sub.includes('saude') || sub.includes('saúde');
+      }
+      if (nameLower.includes('moradia') || nameLower.includes('aluguel') || nameLower.includes('condominio')) {
+        return sub.includes('aluguel') || sub.includes('condominio') || sub.includes('condomínio');
+      }
+      if (nameLower.includes('carro') || nameLower.includes('veiculo') || nameLower.includes('veículo')) {
+        return sub.includes('carro') || sub.includes('manuten') || sub.includes('seguro') || sub.includes('rastreador') || sub.includes('combust');
+      }
+      return sub.includes(cat.id.toLowerCase()) || sub.includes(cat.name.toLowerCase());
+    });
+
+    return filtered.reduce((acc, t) => acc + t.valor, 0);
+  }, [monthTransactions]);
   // Budget Categories State
   const [categories, setCategories] = useState<BudgetCategoryItem[]>(() => {
     const saved = localStorage.getItem('duarte_desktop_categories');
@@ -226,8 +302,8 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const [carBadge, setCarBadge] = useState('');
   const [carSubtext, setCarSubtext] = useState('');
 
-  // Total Forecast Calculation
-  const totalSpent = categories.reduce((sum, c) => sum + c.spent, 0);
+  // Total Forecast Calculation (100% Automático)
+  const totalSpent = categories.reduce((sum, c) => sum + calculateRealSpent(c), 0);
 
   // Open Edit Category Modal
   const handleOpenEditCategory = (cat: BudgetCategoryItem) => {
@@ -246,7 +322,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     if (!editingCategory) return;
 
     const numLimit = parseFloat(catLimit.replace(',', '.')) || 0;
-    const numSpent = parseFloat(catSpent.replace(',', '.')) || 0;
+    const currentRealSpent = calculateRealSpent(editingCategory);
 
     setCategories((prev) =>
       prev.map((c) =>
@@ -255,7 +331,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
               ...c,
               name: catName.trim() || c.name,
               limit: numLimit,
-              spent: numSpent,
+              spent: currentRealSpent,
               note: catNote.trim(),
               icon: catIcon,
               type: catType,
@@ -265,7 +341,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     );
 
     setEditingCategory(null);
-    onShowToast(`Categoria "${catName}" atualizada com sucesso!`);
+    onShowToast(`Teto da categoria "${catName}" atualizado com sucesso!`);
   };
 
   // Delete Category
@@ -472,11 +548,12 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
         {/* Category Budget Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {categories.map((cat) => {
-              const pct = Math.round((cat.spent / (cat.limit || 1)) * 100);
-              const diff = cat.spent - cat.limit;
-              const isExceeded = cat.type === 'expense' && cat.spent > cat.limit;
+              const realSpent = calculateRealSpent(cat);
+              const pct = Math.round((realSpent / (cat.limit || 1)) * 100);
+              const diff = realSpent - cat.limit;
+              const isExceeded = cat.type === 'expense' && realSpent > cat.limit;
               const isWarning = cat.type === 'expense' && !isExceeded && pct >= 90;
-              const isSavingOver = cat.type === 'saving' && cat.spent >= cat.limit;
+              const isSavingOver = cat.type === 'saving' && realSpent >= cat.limit;
 
               // Styles based on status
               let badgeColor = 'bg-[#dcfce7] text-[#006948]';
@@ -539,7 +616,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                       {cat.name}
                     </span>
                     <div className="font-display font-extrabold text-xl text-[#0b1c30] font-mono mt-1">
-                      {formatBRL(cat.spent)}
+                      {formatBRL(realSpent)}
                     </div>
 
                     <div className="flex items-center gap-1 text-[11px] text-[#565e74] mt-1">
@@ -1098,34 +1175,34 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Meta / Teto (R$)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={catLimit}
-                    onChange={(e) => setCatLimit(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Meta / Teto Mensal (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={catLimit}
+                  onChange={(e) => setCatLimit(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-sm font-bold text-[#0b1c30] focus:outline-hidden focus:border-[#006948]"
+                  required
+                />
+              </div>
 
+              {/* Informação do Gasto Real Automático */}
+              <div className="bg-[#f8faff] border border-[#e5eeff] rounded-2xl p-3.5 flex items-center justify-between">
                 <div>
-                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Gasto Atual (R$)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={catSpent}
-                    onChange={(e) => setCatSpent(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                    required
-                  />
+                  <span className="text-[11px] text-[#565e74] font-medium block">
+                    Gasto Realizado no Mês ({selectedMonth})
+                  </span>
+                  <span className="font-display font-extrabold text-base text-[#0b1c30] font-mono">
+                    {formatBRL(calculateRealSpent(editingCategory))}
+                  </span>
                 </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Calculado do Extrato
+                </span>
               </div>
 
               <div>
@@ -1253,35 +1330,23 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Meta / Teto Mensal (R$)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Ex: 800"
-                    value={catLimit}
-                    onChange={(e) => setCatLimit(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Meta / Teto Mensal (R$)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 800"
+                  value={catLimit}
+                  onChange={(e) => setCatLimit(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs font-bold text-[#0b1c30] focus:outline-hidden focus:border-[#006948]"
+                  required
+                />
+              </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Gasto Inicial (R$)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Ex: 0"
-                    value={catSpent}
-                    onChange={(e) => setCatSpent(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                  />
-                </div>
+              <div className="bg-[#f8faff] border border-[#e5eeff] rounded-2xl p-3 text-xs text-[#565e74]">
+                💡 <strong>Gasto Automático:</strong> Os gastos desta categoria serão calculados automaticamente à medida que novas despesas forem lançadas no extrato.
               </div>
 
               <div>
