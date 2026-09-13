@@ -49,3 +49,18 @@ export function formatDateTimeBR(dateStr: string): string {
     minute: '2-digit',
   });
 }
+
+export function getMonthName(mesAno: string): string {
+  if (!mesAno) return '';
+  const meses: Record<string, string> = {
+    '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+    '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+    '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro',
+  };
+  const parts = mesAno.split('-');
+  if (parts.length === 2 && meses[parts[1]]) {
+    return `${meses[parts[1]]} de ${parts[0]}`;
+  }
+  return mesAno;
+}
+

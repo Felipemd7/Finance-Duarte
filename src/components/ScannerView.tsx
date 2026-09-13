@@ -59,11 +59,11 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     estabelecimento: 'Atacadão S/A',
     cnpj: '75.315.333/0045-89',
     ie: '86.492.110',
-    endereco: 'Av. das Américas, 4200 - Barra da Tijuca, RJ',
+    endereco: 'Av. Duque de Caxias, 2800 - Teresina, PI',
     ccf: '039841',
     totalLido: 487.9,
-    meioPagamento: 'Mastercard •• 8821',
-    comprador: 'Mariana D.',
+    meioPagamento: 'Cartão de Crédito NuBank •• 8821',
+    comprador: 'Felipe D.',
     itens: [
       {
         id: 'it-1',
@@ -245,7 +245,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         precoTotal: it.subtotal,
         desmembrado: it.desmembrado,
       })),
-      divisaoCasal: undefined,
     };
 
     onApproveReceipt(approvedReceiptObj);
@@ -584,7 +583,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     </span>
                     <h4 className="font-bold text-xs">ATACADÃO DISTRIBUIÇÃO S/A</h4>
                     <p className="text-[10px] text-[#565e74]">
-                      Av. das Américas, 4200 - Barra da Tijuca, RJ
+                      Av. Duque de Caxias, 2800 - Teresina, PI
                     </p>
                     <p className="text-[10px] text-[#565e74]">
                       CNPJ: 75.315.333/0045-89 • IE: 86.492.110
@@ -706,13 +705,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     </span>
                   </div>
 
-                  <button
-                    onClick={() => showToast('Rateio 50/50 aplicado para esta despesa!')}
-                    className="text-xs font-semibold text-[#006194] hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span>Ajustar Rateio 50/50</span>
-                  </button>
+                  <span className="text-[11px] font-bold text-[#006948] bg-[#ecfdf5] px-2.5 py-1 rounded-full border border-[#a7f3d0]">
+                    ✓ Despesa 50/50 do Casal
+                  </span>
                 </div>
 
                 {/* Extracted Items Table */}
@@ -729,71 +724,30 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f1f5f9]">
-                      {extractedReceipt.itens.map((item, idx) => (
-                        <tr
-                          key={item.id}
-                          className={`hover:bg-[#f8faff] transition-colors ${
-                            item.desmembrado ? 'bg-[#fff5f5]/60' : ''
-                          }`}
-                        >
+                      {extractedReceipt.itens.map((it, idx) => (
+                        <tr key={idx} className="hover:bg-[#f8faff] transition-colors">
+                          <td className="py-2.5 px-3 font-semibold text-[#0b1c30]">
+                            {it.nome}
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-bold text-[#565e74]">
+                            {it.qtd}
+                          </td>
+                          <td className="py-2.5 px-2 text-[#565e74]">
+                            {formatBRL(it.unitario)}
+                          </td>
+                          <td className="py-2.5 px-2 font-bold text-[#0b1c30]">
+                            {formatBRL(it.total)}
+                          </td>
                           <td className="py-2.5 px-3">
-                            <div className="flex items-start gap-1.5">
-                              {item.desmembrado && (
-                                <AlertTriangle className="w-3.5 h-3.5 text-[#dc2626] shrink-0 mt-0.5" />
-                              )}
-                              <div>
-                                <span className={`font-semibold text-xs block ${item.desmembrado ? 'text-[#dc2626]' : 'text-[#0b1c30]'}`}>
-                                  {item.nome}
-                                </span>
-                                <span className="text-[10px] text-[#565e74]">
-                                  Cód EAN: {item.codEan}
-                                </span>
-                                {item.aviso && (
-                                  <span className="block text-[10px] text-[#dc2626] font-medium mt-0.5">
-                                    {item.aviso}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="py-2.5 px-2 text-center font-mono font-medium text-[#565e74]">
-                            {item.qtd}
-                          </td>
-
-                          <td className="py-2.5 px-2 font-mono text-[#565e74]">
-                            {formatBRL(item.unitario)}
-                          </td>
-
-                          <td className="py-2.5 px-2 font-mono font-bold text-[#0b1c30]">
-                            <span className={item.desmembrado ? 'text-[#dc2626]' : ''}>
-                              {formatBRL(item.subtotal)}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eff4ff] text-[#006194]">
+                              {it.categoria}
                             </span>
                           </td>
-
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border inline-flex items-center gap-1 ${item.categoriaColor}`}
-                              >
-                                <span>{item.categoria}</span>
-                              </span>
-                            </div>
-                          </td>
-
                           <td className="py-2.5 px-3 text-center">
-                            {item.desmembrado ? (
-                              <button
-                                onClick={() => handleToggleSplit(idx)}
-                                className="px-2.5 py-1 rounded-lg bg-[#dc2626] hover:bg-[#b91c1c] text-white text-[10px] font-bold transition-colors cursor-pointer shadow-2xs"
-                              >
-                                Desmembrar
-                              </button>
-                            ) : (
-                              <div className="w-5 h-5 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center mx-auto">
-                                <Check className="w-3 h-3 stroke-[3]" />
-                              </div>
-                            )}
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#006948]">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#006948]" />
+                              Identificado
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -805,19 +759,19 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 <div className="bg-[#f8faff] rounded-2xl p-3 border border-[#e5eeff] flex items-center justify-between mb-5 flex-wrap gap-3">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center -space-x-1">
-                      <div className="w-5 h-5 rounded-full bg-[#005a3c] text-white text-[9px] font-bold flex items-center justify-center border border-white">
-                        G
+                      <div className="w-6 h-6 rounded-full bg-[#2563eb] text-white text-[10px] font-bold flex items-center justify-center border border-white">
+                        F
                       </div>
-                      <div className="w-5 h-5 rounded-full bg-[#006194] text-white text-[9px] font-bold flex items-center justify-center border border-white">
-                        M
+                      <div className="w-6 h-6 rounded-full bg-[#ec4899] text-white text-[10px] font-bold flex items-center justify-center border border-white">
+                        G
                       </div>
                     </div>
                     <div>
                       <span className="text-xs font-bold text-[#0b1c30] block">
-                        Rateio Automático: Paritário 50/50
+                        Despesa Compartilhada do Casal (50/50)
                       </span>
                       <span className="text-[11px] text-[#565e74]">
-                        R$ 243,95 debitado de cada conta de controle
+                        Lançamento integrado ao orçamento conjunto de Felipe e Genivânia
                       </span>
                     </div>
                   </div>
@@ -1015,7 +969,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             </button>
             <span>•</span>
             <button className="hover:text-[#006948] hover:underline cursor-pointer">
-              Regras de Rateio
+              Orçamento Paritário 50/50
             </button>
             <span>•</span>
             <button className="hover:text-[#006948] hover:underline cursor-pointer">

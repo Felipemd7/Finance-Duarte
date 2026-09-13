@@ -19,7 +19,7 @@ interface HeaderProps {
   onTabChange: (tab: string) => void;
   selectedMonth: string;
   onMonthChange: (month: string) => void;
-  activeUser: string; // 'casal' | 'guilherme' | 'mariana'
+  activeUser: string; // 'casal' | 'felipe' | 'genivania'
   onUserChange: (user: string) => void;
   users: User[];
   onOpenNewTx: () => void;
@@ -50,8 +50,8 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   const getActiveUserLabel = () => {
-    if (activeUser === 'guilherme') return 'Guilherme';
-    if (activeUser === 'mariana') return 'Mariana';
+    if (activeUser === 'felipe' || activeUser === 'usr-felipe') return 'Felipe';
+    if (activeUser === 'genivania' || activeUser === 'usr-genivania') return 'Genivânia';
     return 'Casal Duarte';
   };
 
@@ -282,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="w-9 h-9 rounded-full bg-[#eff4ff] border-2 border-[#006948]/20 flex items-center justify-center text-xs font-bold text-[#006948] shadow-2xs overflow-hidden">
                   <img
                     src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-                    alt="Gui & Mari"
+                    alt="Felipe & Genivânia"
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
@@ -294,7 +294,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="hidden xl:flex flex-col text-left">
                 <span className="text-xs font-bold text-[#0b1c30] leading-none">
-                  Guilherme & Mariana
+                  Felipe & Genivânia
                 </span>
                 <span className="text-[10px] text-[#565e74] mt-0.5">
                   Casal Duarte
@@ -309,11 +309,21 @@ export const Header: React.FC<HeaderProps> = ({
                     Gestão Familiar
                   </span>
                 </div>
-                <div className="px-3 py-2 text-xs text-[#0b1c30] flex items-center gap-2 bg-[#ecfdf5]">
+                <div className="px-3 py-2 text-xs text-[#0b1c30] flex items-center gap-2 bg-[#ecfdf5] border-b border-[#e5eeff]">
                   <Users className="w-4 h-4 text-[#006948]" />
                   <div>
                     <span className="font-bold text-[#006948] block">Casal Duarte</span>
-                    <span className="text-[10px] text-[#565e74]">Finanças 100% unificadas</span>
+                    <span className="text-[10px] text-[#565e74]">Felipe & Genivânia</span>
+                  </div>
+                </div>
+                <div className="py-1">
+                  <div className="px-3 py-1.5 text-xs text-[#0b1c30] flex items-center gap-2 hover:bg-[#f8faff]">
+                    <div className="w-5 h-5 rounded-full bg-[#2563eb] text-white flex items-center justify-center text-[10px] font-bold">F</div>
+                    <span className="font-medium text-xs">Felipe Duarte</span>
+                  </div>
+                  <div className="px-3 py-1.5 text-xs text-[#0b1c30] flex items-center gap-2 hover:bg-[#f8faff]">
+                    <div className="w-5 h-5 rounded-full bg-[#ec4899] text-white flex items-center justify-center text-[10px] font-bold">G</div>
+                    <span className="font-medium text-xs">Genivânia Duarte</span>
                   </div>
                 </div>
               </div>

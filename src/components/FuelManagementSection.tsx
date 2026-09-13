@@ -79,7 +79,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
   const [formPrecoLitro, setFormPrecoLitro] = useState('');
   const [formLitros, setFormLitros] = useState('');
   const [formKmAtual, setFormKmAtual] = useState('');
-  const [formPagoPor, setFormPagoPor] = useState<'Guilherme' | 'Mariana' | 'Casal'>('Guilherme');
+  const [formPagoPor, setFormPagoPor] = useState<'Felipe' | 'Genivânia' | 'Casal'>('Felipe');
   const [formFormaPagamento, setFormFormaPagamento] = useState('Cartão de Crédito');
   const [formObservacoes, setFormObservacoes] = useState('');
   const [formReceiptName, setFormReceiptName] = useState('');
@@ -308,7 +308,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     // Suggest the next estimated KM based on last registered KM
     const nextKm = metrics.ultimoKm > 0 ? (metrics.ultimoKm + 500).toString() : '41800';
     setFormKmAtual(nextKm);
-    setFormPagoPor('Guilherme');
+    setFormPagoPor('Felipe');
     setFormFormaPagamento('Cartão de Crédito');
     setFormObservacoes('');
     setFormReceiptName('');
@@ -326,7 +326,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     setFormPrecoLitro(log.precoLitro.toString());
     setFormLitros(log.litros.toString());
     setFormKmAtual(log.kmAtual.toString());
-    setFormPagoPor(log.pagoPor || 'Guilherme');
+    setFormPagoPor(log.pagoPor || 'Felipe');
     setFormFormaPagamento(log.formaPagamento || 'Cartão de Crédito');
     setFormObservacoes(log.observacoes || '');
     setFormReceiptName(log.comprovanteNome || '');
@@ -1208,9 +1208,9 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     onChange={(e) => setFormPagoPor(e.target.value as any)}
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
                   >
-                    <option value="Guilherme">Guilherme</option>
-                    <option value="Mariana">Mariana</option>
-                    <option value="Casal">Casal (Rateio 50/50)</option>
+                    <option value="Felipe">Felipe</option>
+                    <option value="Genivânia">Genivânia</option>
+                    <option value="Casal">Casal (Conta Conjunta)</option>
                   </select>
                 </div>
 

@@ -412,34 +412,27 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
           <div className="bg-white rounded-2xl p-2.5 px-3.5 border border-[#e5eeff] shadow-[0_2px_8px_rgba(11,28,48,0.03)] flex items-center gap-3">
             <div className="flex items-center -space-x-2">
-              <img
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
-                alt="Guilherme"
-                className="w-8 h-8 rounded-full border-2 border-white object-cover shadow-2xs"
-                referrerPolicy="no-referrer"
-              />
-              <img
-                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80"
-                alt="Mariana"
-                className="w-8 h-8 rounded-full border-2 border-white object-cover shadow-2xs"
-                referrerPolicy="no-referrer"
-              />
+              <div
+                className="w-8 h-8 rounded-full bg-[#2563eb] text-white font-bold text-xs flex items-center justify-center border-2 border-white shadow-2xs"
+                title="Felipe Duarte"
+              >
+                F
+              </div>
+              <div
+                className="w-8 h-8 rounded-full bg-[#ec4899] text-white font-bold text-xs flex items-center justify-center border-2 border-white shadow-2xs"
+                title="Genivânia Duarte"
+              >
+                G
+              </div>
             </div>
-            <div className="text-left pr-1">
+            <div className="text-left pr-2">
               <span className="text-xs font-bold text-[#0b1c30] block">
-                Rateio Ativo: 50% / 50%
+                Gestão Conjunta 50/50
               </span>
               <span className="text-[10px] text-[#006948] font-medium block">
-                Ambos com Acesso Master
+                Felipe & Genivânia
               </span>
             </div>
-            <button
-              onClick={() => onShowToast('Paridade 50/50 bloqueada para a gestão conjunta de metas.')}
-              className="p-1.5 rounded-lg text-[#565e74] hover:text-[#0b1c30] hover:bg-[#eff4ff] cursor-pointer"
-              title="Ajustar Paridade"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>
@@ -614,7 +607,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                 Planejamento & Custos Fixos Anuais
               </h3>
               <p className="text-xs text-[#565e74]">
-                Provisões e rateio 50% Guilherme / 50% Mariana • Total orçado: R$ 9.188,00/ano
+                Provisões e rateio 50% Felipe / 50% Genivânia • Total orçado: R$ 9.188,00/ano
               </p>
             </div>
             <span className="text-xs font-bold text-[#006194] bg-[#eff4ff] px-3 py-1 rounded-full border border-[#dce9ff]">
@@ -721,7 +714,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                       Azeite Extra Virgem 500ml
                     </span>
                     <span className="text-[10px] text-[#565e74]">
-                      Guilherme via Alexa 08:30
+                      Felipe via Alexa 08:30
                     </span>
                   </div>
                 </div>
@@ -739,7 +732,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                       Café Especial em Grãos 1kg
                     </span>
                     <span className="text-[10px] text-[#7c3aed] font-medium">
-                      Mariana via Siri 14:15 • Item Gourmet
+                      Genivânia via Siri 14:15 • Item Gourmet
                     </span>
                   </div>
                 </div>
@@ -960,7 +953,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
               </div>
 
               <p className="text-[11px] text-[#565e74] leading-relaxed mb-3">
-                Atalhos instalados no iPhone de Mariana e Guilherme com categorização rápida por toque ou voz.
+                Atalhos instalados nos celulares de Felipe e Genivânia com categorização rápida por toque ou voz.
               </p>
 
               <div className="space-y-1.5 text-[10px] font-mono bg-[#f8faff] p-2.5 rounded-xl border border-[#e5eeff] text-[#0b1c30]">
@@ -1046,10 +1039,10 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           </button>
           <span>•</span>
           <button
-            onClick={() => onShowToast('Regras de Rateio: Paridade estrita de 50% para Guilherme e 50% para Mariana.')}
+            onClick={() => onShowToast('Parceria 50/50: Orçamento 100% compartilhado entre Felipe e Genivânia.')}
             className="hover:text-[#006948] hover:underline cursor-pointer"
           >
-            Regras de Rateio
+            Parceria 50/50
           </button>
           <span>•</span>
           <button

@@ -91,7 +91,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       store: 'atacadao',
       origem: {
         tipo: 'alexa',
-        label: 'Guilherme via Alexa 08:30',
+        label: 'Felipe via Alexa 08:30',
       },
     },
     {
@@ -102,7 +102,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       store: 'atacadao',
       origem: {
         tipo: 'siri',
-        label: 'Mariana via Siri 14:15',
+        label: 'Genivânia via Siri 14:15',
         subtag: 'Item Gourmet',
       },
     },
@@ -209,7 +209,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         store: activeStore,
         origem: {
           tipo: 'alexa',
-          label: 'Guilherme via Alexa agora',
+          label: 'Felipe via Alexa agora',
         },
       };
       setItems((prev) => [voiceItem, ...prev]);

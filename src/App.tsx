@@ -19,6 +19,7 @@ import {
   INITIAL_SPREADSHEETS,
 } from './data/initialData';
 import { Transaction, Receipt, FinancialGoal, SpreadsheetRow, User } from './types';
+import { fetchSupabaseData } from './services/supabaseService';
 
 export default function App() {
   // Current active tab - default to 'dashboard' (Visão Consolidada do Casal)
@@ -26,15 +27,22 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState<string>('Março 2026');
   const [activeUser, setActiveUser] = useState<string>('casal');
 
-  // Core Data State with localStorage caching
-  const [users] = useState<User[]>(INITIAL_USERS);
+  // Supabase sync state
+  const [isSupabaseSynced, setIsSupabaseSynced] = useState<boolean>(false);
+  const [syncStatusText, setSyncStatusText] = useState<string>('Conectando ao Supabase...');
+
+  // Core Data State
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [receipts, setReceipts] = useState<Receipt[]>(() => {
     const saved = localStorage.getItem('duarte_receipts');
     return saved ? JSON.parse(saved) : INITIAL_RECEIPTS;
   });
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('duarte_transactions');
-    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    if (saved && !saved.includes('guilherme') && !saved.includes('mariana')) {
+      return JSON.parse(saved);
+    }
+    return INITIAL_TRANSACTIONS;
   });
   const [goals, setGoals] = useState<FinancialGoal[]>(() => {
     const saved = localStorage.getItem('duarte_goals');
@@ -47,6 +55,33 @@ export default function App() {
 
   // Modals
   const [isNewTxModalOpen, setIsNewTxModalOpen] = useState(false);
+
+  // Sync with Supabase on Mount
+  useEffect(() => {
+    // Clear old mock cache if it had legacy users
+    const cachedTx = localStorage.getItem('duarte_transactions');
+    if (cachedTx && (cachedTx.includes('guilherme') || cachedTx.includes('mariana'))) {
+      localStorage.removeItem('duarte_transactions');
+      localStorage.removeItem('duarte_receipts');
+      localStorage.removeItem('duarte_goals');
+      localStorage.removeItem('duarte_spreadsheets');
+    }
+
+    async function loadCloudData() {
+      const cloudData = await fetchSupabaseData();
+      if (cloudData && cloudData.transactions.length > 0) {
+        if (cloudData.users.length > 0) setUsers(cloudData.users);
+        setTransactions(cloudData.transactions);
+        if (cloudData.goals.length > 0) setGoals(cloudData.goals);
+        if (cloudData.spreadsheets.length > 0) setSpreadsheets(cloudData.spreadsheets);
+        setIsSupabaseSynced(true);
+        setSyncStatusText(`🟢 Supabase Conectado • ${cloudData.transactions.length} transações de Felipe & Genivânia sincronizadas`);
+      } else {
+        setSyncStatusText('Dados locais ativos (Supabase offline)');
+      }
+    }
+    loadCloudData();
+  }, []);
 
   // Sync to localStorage
   useEffect(() => {
@@ -170,6 +205,19 @@ export default function App() {
         users={users}
         onOpenNewTx={() => setIsNewTxModalOpen(true)}
       />
+
+      {/* Supabase Sync Banner */}
+      <div className="bg-[#f0fdf4] border-b border-[#bbf7d0] py-1.5 px-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-[#166534]">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${isSupabaseSynced ? 'bg-[#16a34a] animate-pulse' : 'bg-[#eab308]'}`} />
+            <span className="font-medium text-xs">{syncStatusText}</span>
+          </div>
+          <span className="text-[11px] text-[#15803d] font-semibold hidden sm:inline">
+            Felipe Duarte & Genivânia Duarte
+          </span>
+        </div>
+      </div>
 
       {/* Main Viewport Container */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">

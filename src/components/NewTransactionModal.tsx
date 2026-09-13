@@ -10,13 +10,14 @@ import {
   Calendar,
   Tag,
 } from 'lucide-react';
-import { Transaction, CategoryType, PartnerSplit } from '../types';
+import { Transaction, CategoryType } from '../types';
+import { addTransactionToCloud } from '../services/supabaseService';
 
 interface NewTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (tx: Transaction) => void;
-  defaultMonth: string;
+  defaultMonth?: string;
 }
 
 export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
@@ -32,7 +33,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   const [categoria, setCategoria] = useState<CategoryType>('Variável');
   const [subcategoria, setSubcategoria] = useState('Supermercado');
   const [formaPagamento, setFormaPagamento] = useState('Cartão de Crédito NuBank');
-  const [splitType, setSplitType] = useState<'50/50' | '100_guilherme' | '100_mariana'>('50/50');
+  const [responsavel, setResponsavel] = useState<'Felipe' | 'Genivânia'>('Felipe');
   const [observacoes, setObservacoes] = useState('');
 
   if (!isOpen) return null;
@@ -42,34 +43,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
     const numVal = parseFloat(valor.replace(',', '.'));
     if (isNaN(numVal) || numVal <= 0) return;
 
-    let split: PartnerSplit = {
-      tipo: splitType,
-      porcentagemGuilherme: 50,
-      porcentagemMariana: 50,
-      valorGuilherme: numVal / 2,
-      valorMariana: numVal / 2,
-    };
-
-    if (splitType === '100_guilherme') {
-      split = {
-        tipo: '100_guilherme',
-        porcentagemGuilherme: 100,
-        porcentagemMariana: 0,
-        valorGuilherme: numVal,
-        valorMariana: 0,
-      };
-    } else if (splitType === '100_mariana') {
-      split = {
-        tipo: '100_mariana',
-        porcentagemGuilherme: 0,
-        porcentagemMariana: 100,
-        valorGuilherme: 0,
-        valorMariana: numVal,
-      };
-    }
-
     const newTx: Transaction = {
       id: 'tx-' + Date.now(),
+      usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
       data,
       tipo,
       categoria: tipo === 'receita' ? 'Receita' : categoria,
@@ -78,10 +54,12 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       valor: numVal,
       formaPagamento,
       status: 'pago',
-      pagoPor: splitType === '100_mariana' ? 'Mariana' : 'Guilherme',
-      divisaoCasal: split,
+      pagoPor: responsavel,
       observacoes: observacoes.trim() || undefined,
     };
+
+    // Save to Supabase in background
+    addTransactionToCloud(newTx).catch((err) => console.warn('Falha ao salvar no Supabase:', err));
 
     onSave(newTx);
     onClose();
@@ -91,7 +69,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
     Invariável: ['Aluguel', 'Condomínio', 'Seguro (Carro)', 'Rastreador', 'Plano de Saúde', 'Internet / TV'],
     Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Lazer', 'Manutenção de carro', 'Energia Elétrica', 'Gás'],
     'Extra/Eventualidades': ['IPVA', 'Presentes & Comemorações', 'Médico / Exames', 'Viagem', 'Manutenção Casa'],
-    Receita: ['Salário Guilherme', 'Salário Mariana', 'Rendimento / Outros'],
+    Receita: ['Salário Felipe', 'Salário Genivânia', 'Rendimento / Outros'],
   };
 
   return (
@@ -244,47 +222,45 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             </select>
           </div>
 
-          {/* Divisão do Casal */}
-          <div className="p-3 bg-[#e5eeff] rounded-xl border border-[#dce9ff]">
+          {/* Quem pagou */}
+          <div>
             <label className="text-xs font-bold text-[#0b1c30] flex items-center gap-1.5 mb-1.5">
               <Users className="w-3.5 h-3.5 text-[#006948]" />
-              Rateio Casal Duarte
+              Quem realizou o pagamento?
             </label>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setSplitType('50/50')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
-                  splitType === '50/50'
-                    ? 'bg-[#006948] text-white shadow-xs'
-                    : 'bg-white text-[#0b1c30] hover:bg-[#f8f9ff]'
+                onClick={() => setResponsavel('Felipe')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  responsavel === 'Felipe'
+                    ? 'bg-[#2563eb] text-white shadow-xs'
+                    : 'bg-[#f8f9ff] text-[#0b1c30] border border-[#cbd5e1] hover:bg-[#eff4ff]'
                 }`}
               >
-                50% / 50%
+                <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+                  F
+                </span>
+                Felipe Duarte
               </button>
               <button
                 type="button"
-                onClick={() => setSplitType('100_guilherme')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
-                  splitType === '100_guilherme'
-                    ? 'bg-[#006948] text-white shadow-xs'
-                    : 'bg-white text-[#0b1c30] hover:bg-[#f8f9ff]'
+                onClick={() => setResponsavel('Genivânia')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  responsavel === 'Genivânia'
+                    ? 'bg-[#ec4899] text-white shadow-xs'
+                    : 'bg-[#f8f9ff] text-[#0b1c30] border border-[#cbd5e1] hover:bg-[#eff4ff]'
                 }`}
               >
-                100% Guilherme
-              </button>
-              <button
-                type="button"
-                onClick={() => setSplitType('100_mariana')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
-                  splitType === '100_mariana'
-                    ? 'bg-[#006948] text-white shadow-xs'
-                    : 'bg-white text-[#0b1c30] hover:bg-[#f8f9ff]'
-                }`}
-              >
-                100% Mariana
+                <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+                  G
+                </span>
+                Genivânia Duarte
               </button>
             </div>
+            <p className="text-[10px] text-[#565e74] mt-1.5">
+              Despesa integrada ao orçamento conjunto 50/50 do casal.
+            </p>
           </div>
 
           {/* Observações */}

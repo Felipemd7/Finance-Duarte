@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 
+import { supabaseServer, isSupabaseServerConfigured } from './server/supabase';
+
 dotenv.config();
 
 const app = express();
@@ -49,11 +51,11 @@ let shoppingListStore: Array<{
     id: 'shop-1',
     estabelecimentoTipo: 'Supermercado',
     estabelecimentoNome: 'Atacadão',
-    nome: 'Arroz Tipo 1 5kg',
+    nome: 'Arroz Integral 5kg',
     quantidade: '2 pacotes',
     categoriaItem: 'Alimentos',
-    comprado: true,
-    adicionadoPor: 'Guilherme',
+    comprado: false,
+    adicionadoPor: 'Felipe',
     dataAdicao: '2026-03-03',
     precoEstimado: 58.0,
   },
@@ -64,8 +66,8 @@ let shoppingListStore: Array<{
     nome: 'Azeite de Oliva Extra Virgem',
     quantidade: '1 garrafa',
     categoriaItem: 'Alimentos',
-    comprado: true,
-    adicionadoPor: 'Alexa',
+    comprado: false,
+    adicionadoPor: 'Genivânia',
     dataAdicao: '2026-03-03',
     precoEstimado: 45.0,
   },
@@ -76,8 +78,8 @@ let shoppingListStore: Array<{
     nome: 'Detergente e Sabão Omo Líquido 3L',
     quantidade: '1 galão',
     categoriaItem: 'Limpeza',
-    comprado: true,
-    adicionadoPor: 'Mariana',
+    comprado: false,
+    adicionadoPor: 'Genivânia',
     dataAdicao: '2026-03-02',
     precoEstimado: 40.0,
   },
@@ -89,7 +91,7 @@ let shoppingListStore: Array<{
     quantidade: '2 pacotes',
     categoriaItem: 'Alimentos',
     comprado: false,
-    adicionadoPor: 'Siri',
+    adicionadoPor: 'Felipe',
     dataAdicao: '2026-03-07',
     precoEstimado: 38.0,
   },
@@ -100,8 +102,8 @@ let shoppingListStore: Array<{
     nome: 'Vitamina C efervescente',
     quantidade: '2 caixas',
     categoriaItem: 'Remédio',
-    comprado: true,
-    adicionadoPor: 'Mariana',
+    comprado: false,
+    adicionadoPor: 'Genivânia',
     dataAdicao: '2026-03-01',
     precoEstimado: 70.0,
   },
@@ -903,42 +905,106 @@ Retorne APENAS um JSON estrito no seguinte formato:
 });
 
 // 3. Shopping List REST API
-app.get('/api/shopping-list', (_req, res) => {
+app.get('/api/shopping-list', async (_req, res) => {
+  if (isSupabaseServerConfigured) {
+    try {
+      const { data, error } = await supabaseServer.from('shopping_list').select('*').order('created_at', { ascending: false });
+      if (!error && data) {
+        const items = data.map((s: any) => ({
+          id: s.id,
+          estabelecimentoTipo: s.estabelecimento_tipo,
+          estabelecimentoNome: s.estabelecimento_nome,
+          nome: s.nome_do_item,
+          quantidade: s.quantidade,
+          categoriaItem: s.categoria_item,
+          comprado: s.comprado,
+          adicionadoPor: s.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia',
+          origem: s.origem,
+          precoEstimado: Number(s.preco_estimado || 0),
+          dataAdicao: s.data_adicao,
+        }));
+        return res.json({ items });
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar lista do Supabase:', e);
+    }
+  }
   res.json({ items: shoppingListStore });
 });
 
-app.post('/api/shopping-list', (req, res) => {
-  const { nome, estabelecimentoTipo = 'Supermercado', quantidade, categoriaItem = 'Alimentos', adicionadoPor = 'Usuário', precoEstimado } = req.body;
+app.post('/api/shopping-list', async (req, res) => {
+  const { nome, estabelecimentoTipo = 'Supermercado', estabelecimentoNome = 'Atacadão', quantidade, categoriaItem = 'Alimentos', adicionadoPor = 'Felipe', precoEstimado } = req.body;
   if (!nome) {
     return res.status(400).json({ error: 'Nome do item é obrigatório.' });
   }
+  const id = 'shop-' + Date.now();
   const newItem = {
-    id: 'shop-' + Date.now(),
+    id,
     estabelecimentoTipo,
+    estabelecimentoNome,
     nome,
     quantidade: quantidade || '1 un',
     categoriaItem,
     comprado: false,
-    adicionadoPor,
+    adicionadoPor: adicionadoPor.includes('Genivânia') ? 'Genivânia' : 'Felipe',
     dataAdicao: new Date().toISOString().split('T')[0],
     precoEstimado: Number(precoEstimado) || 0,
   };
+
+  if (isSupabaseServerConfigured) {
+    try {
+      await supabaseServer.from('shopping_list').insert({
+        id,
+        usuario_id: newItem.adicionadoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+        estabelecimento_tipo: estabelecimentoTipo,
+        estabelecimento_nome: estabelecimentoNome,
+        nome_do_item: nome,
+        quantidade: newItem.quantidade,
+        categoria_item: categoriaItem,
+        comprado: false,
+        origem: 'manual',
+        preco_estimado: newItem.precoEstimado,
+        data_adicao: newItem.dataAdicao,
+      });
+    } catch (e) {
+      console.warn('Erro ao inserir item no Supabase:', e);
+    }
+  }
+
   shoppingListStore.unshift(newItem);
   res.status(201).json({ success: true, item: newItem });
 });
 
-app.put('/api/shopping-list/:id', (req, res) => {
+app.put('/api/shopping-list/:id', async (req, res) => {
   const { id } = req.params;
-  const index = shoppingListStore.findIndex((i) => i.id === id);
-  if (index === -1) {
-    return res.status(404).json({ error: 'Item não encontrado.' });
+  if (isSupabaseServerConfigured) {
+    try {
+      const updates: any = {};
+      if (req.body.comprado !== undefined) updates.comprado = req.body.comprado;
+      if (req.body.nome !== undefined) updates.nome_do_item = req.body.nome;
+      if (req.body.quantidade !== undefined) updates.quantidade = req.body.quantidade;
+      await supabaseServer.from('shopping_list').update(updates).eq('id', id);
+    } catch (e) {
+      console.warn('Erro ao atualizar item no Supabase:', e);
+    }
   }
-  shoppingListStore[index] = { ...shoppingListStore[index], ...req.body };
-  res.json({ success: true, item: shoppingListStore[index] });
+  const index = shoppingListStore.findIndex((i) => i.id === id);
+  if (index !== -1) {
+    shoppingListStore[index] = { ...shoppingListStore[index], ...req.body };
+    return res.json({ success: true, item: shoppingListStore[index] });
+  }
+  res.json({ success: true });
 });
 
-app.delete('/api/shopping-list/:id', (req, res) => {
+app.delete('/api/shopping-list/:id', async (req, res) => {
   const { id } = req.params;
+  if (isSupabaseServerConfigured) {
+    try {
+      await supabaseServer.from('shopping_list').delete().eq('id', id);
+    } catch (e) {
+      console.warn('Erro ao deletar item no Supabase:', e);
+    }
+  }
   shoppingListStore = shoppingListStore.filter((i) => i.id !== id);
   res.json({ success: true, deletedId: id });
 });
@@ -1151,8 +1217,8 @@ app.get('/api/summary/monthly', (_req, res) => {
     farmaciaTotal: 142.7,
     estouroCategorias: [],
     divisaoCasal: {
-      guilherme: 2911.95,
-      mariana: 2911.95,
+      felipe: 2911.95,
+      genivania: 2911.95,
     },
   });
 });

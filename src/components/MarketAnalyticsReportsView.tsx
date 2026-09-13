@@ -135,7 +135,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
         { label: 'Frango Sassami (12 kg @ R$ 20,90)', store: 'Atacadão' },
         { label: 'Picanha / Alcatra Angus (4,2 kg @ R$ 61,90)', store: "Sam's Club" },
         { label: 'Carne Moída Patinho (5,5 kg @ R$ 38,00)', store: 'Atacadão' },
-        { label: 'Salmão / Filé de Peixe (2,8 kg @ R$ 68,00)', store: 'Pão de Açúcar' },
+        { label: 'Salmão / Filé de Peixe (2,8 kg @ R$ 68,00)', store: 'Carvalho Super' },
       ],
       alertText: 'Atenção: Cortes nobres excederam em R$ 190',
       alertType: 'danger',
@@ -153,8 +153,8 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
       metric2Value: 'R$ 7,80 / 1 L líq.',
       items: [
         { label: 'Sabão OMO 5L (2 un = 10L @ R$ 38,90)', store: 'Atacadão' },
-        { label: 'Amaciante Conc. 1,5L (2 un @ R$ 24,90)', store: "Sam's Club" },
-        { label: 'Finish Lava-louças (1 pct 30un @ R$ 59,90)', store: "Sam's Club" },
+        { label: 'Amaciante Conc. 1,5L (2 un @ R$ 24,90)', store: 'Geramercantil' },
+        { label: 'Finish Lava-louças (1 pct 30un @ R$ 59,90)', store: 'Carvalho Super' },
         { label: 'Detergente Neutro (6 un 500ml @ R$ 2,89)', store: 'Atacadão' },
       ],
       alertText: 'Economia de 22% comprando galão 5L',
@@ -174,8 +174,8 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
       items: [
         { label: 'Arroz Tipo 1 Camil (4x 5kg = 20kg @ R$ 28,90)', store: 'R$ 5,78/kg' },
         { label: 'Feijão Carioca Premium (5 kg @ R$ 8,90)', store: 'Atacadão' },
-        { label: 'Azeite Extra Virgem (4 vidros 500ml @ R$ 41,20)', store: 'Pão de Açúcar' },
-        { label: 'Macarrão Grano Duro (4 pct 500g @ R$ 9,50)', store: "Sam's Club" },
+        { label: 'Azeite Extra Virgem (4 vidros 500ml @ R$ 41,20)', store: 'Carvalho Super' },
+        { label: 'Macarrão Grano Duro (4 pct 500g @ R$ 9,50)', store: 'Geramercantil' },
       ],
       alertText: 'Azeite subiu +14% vs Fevereiro',
       alertType: 'warning',
@@ -548,10 +548,10 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
 
           {/* Footer Footnote */}
           <div className="pt-3 border-t border-[#f1f5f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-[#565e74]">
-            <span>* Despesas divididas em proporção paritária (50% Rodrigo / 50% Mariana)</span>
+            <span>* Despesas divididas em proporção paritária (50% Felipe / 50% Genivânia)</span>
             <span className="font-semibold text-[#006948] flex items-center gap-1">
               <span>🍃</span>
-              <span>Economia acumulada estimada vs. pequenos comércios: R$ 398,40</span>
+              <span>Economia acumulada estimada em compras planejadas: R$ 398,40</span>
             </span>
           </div>
         </div>
@@ -562,10 +562,10 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
             <div className="flex items-center justify-between pb-2 border-b border-[#f1f5f9]">
               <div>
                 <span className="text-[10px] uppercase font-bold text-[#565e74] tracking-wider">
-                  RATEIO CASAL DUARTE
+                  ORÇAMENTO FAMILIAR CONJUNTO
                 </span>
                 <h2 className="font-display font-bold text-base text-[#0b1c30] mt-0.5">
-                  Divisão Operacional
+                  Gestão Unificada 50/50
                 </h2>
               </div>
               <div className="w-7 h-7 rounded-lg bg-[#eff4ff] text-[#006194] flex items-center justify-center">
@@ -574,40 +574,40 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
             </div>
 
             <p className="text-xs text-[#565e74] mt-2">
-              Alocação dos R$ 3.280,00 lançados no Cartão Black Conjunto.
+              Lançamentos integrados diretamente na Conta Central do Casal Duarte.
             </p>
 
-            {/* Rodrigo & Mariana 50/50 Split Box */}
+            {/* Felipe & Genivânia 50/50 Split Box */}
             <div className="mt-3.5 flex flex-col gap-2.5">
-              {/* Member 1: Rodrigo Duarte */}
+              {/* Member 1: Felipe Duarte */}
               <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#006948] text-white font-bold text-xs flex items-center justify-center">
-                    RD
+                  <div className="w-8 h-8 rounded-full bg-[#2563eb] text-white font-bold text-xs flex items-center justify-center">
+                    FD
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-bold text-xs text-[#0b1c30]">Rodrigo Duarte</span>
-                    <span className="text-[10px] text-[#565e74]">Conta Corrente 1</span>
+                    <span className="font-bold text-xs text-[#0b1c30]">Felipe Duarte</span>
+                    <span className="text-[10px] text-[#565e74]">Responsável 1</span>
                   </div>
                 </div>
                 <span className="font-display font-bold text-sm text-[#0b1c30] tnum">
-                  R$ 1.640,00
+                  50%
                 </span>
               </div>
 
-              {/* Member 2: Mariana Duarte */}
+              {/* Member 2: Genivânia Duarte */}
               <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#006194] text-white font-bold text-xs flex items-center justify-center">
-                    MD
+                  <div className="w-8 h-8 rounded-full bg-[#ec4899] text-white font-bold text-xs flex items-center justify-center">
+                    GD
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-bold text-xs text-[#0b1c30]">Mariana Duarte</span>
-                    <span className="text-[10px] text-[#565e74]">Conta Corrente 2</span>
+                    <span className="font-bold text-xs text-[#0b1c30]">Genivânia Duarte</span>
+                    <span className="text-[10px] text-[#565e74]">Responsável 2</span>
                   </div>
                 </div>
                 <span className="font-display font-bold text-sm text-[#0b1c30] tnum">
-                  R$ 1.640,00
+                  50%
                 </span>
               </div>
             </div>
@@ -783,7 +783,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
               <span>MATRIZ DE ARBITRAGEM DE COMPRAS</span>
             </div>
             <h2 className="font-display font-bold text-base sm:text-lg text-[#0b1c30] mt-0.5">
-              Comparativo de Preços Médios: Atacadão vs. Sam's Club vs. Pão de Açúcar
+              Comparativo de Preços Médios: Atacadão vs. Sam's Club vs. Carvalho Super
             </h2>
             <p className="text-xs text-[#565e74]">
               Mapeamento de onde compensa abastecer cada tipo de insumo doméstico para maximizar o
@@ -805,7 +805,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
                 <th className="py-2.5 px-3">PRODUTO / INSUMO</th>
                 <th className="py-2.5 px-3">ATACADÃO (ATACADO)</th>
                 <th className="py-2.5 px-3">SAM'S CLUB (CLUBE)</th>
-                <th className="py-2.5 px-3">PÃO DE AÇÚCAR (VAREJO)</th>
+                <th className="py-2.5 px-3">CARVALHO SUPER (VAREJO)</th>
                 <th className="py-2.5 px-3">DIFERENCIAL / DISPERSÃO</th>
                 <th className="py-2.5 px-3 text-right">DECISÃO DO CASAL</th>
               </tr>
@@ -827,7 +827,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
                   R$ 34,90 <span className="text-[10px]">(R$ 6,98/kg)</span>
                 </td>
                 <td className="py-3 px-3 font-bold text-[#ba1a1a]">
-                  +20,7% <span className="font-normal text-[#565e74]">no Pão de Açúcar</span>
+                  +20,7% <span className="font-normal text-[#565e74]">no Carvalho Super</span>
                 </td>
                 <td className="py-3 px-3 text-right">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]">
@@ -902,7 +902,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
                   R$ 69,90 <span className="text-[10px]">(Marcas Gourmet)</span>
                 </td>
                 <td className="py-3 px-3 font-bold text-[#ba1a1a]">
-                  +27,3% <span className="font-normal text-[#565e74]">no Pão de Açúcar</span>
+                  +27,3% <span className="font-normal text-[#565e74]">no Carvalho Super</span>
                 </td>
                 <td className="py-3 px-3 text-right">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#eff4ff] text-[#006194] border border-[#dce9ff]">
@@ -945,7 +945,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
             <Lightbulb className="w-4 h-4 text-[#d97706] shrink-0" />
             <span>
               <strong>Regra de Ouro Duarte:</strong> Limpeza e Secos no Atacadão; Carnes nobres e
-              Café no Sam's Club; Frescos imediatos no Pão de Açúcar.
+              Café no Sam's Club; Frescos imediatos no Carvalho Super.
             </span>
           </div>
           <span className="text-[11px] font-semibold text-[#565e74] shrink-0">

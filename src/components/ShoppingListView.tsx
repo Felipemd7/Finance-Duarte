@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShoppingCart,
   Receipt,
@@ -26,6 +26,12 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { formatBRL } from '../utils/formatters';
+import {
+  fetchShoppingListFromCloud,
+  addShoppingItemToCloud,
+  toggleShoppingItemInCloud,
+  deleteShoppingItemInCloud,
+} from '../services/supabaseService';
 
 interface ShoppingListViewProps {
   receipts?: any[];
@@ -81,65 +87,87 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Main items list matching image
+  // Main items list from Supabase
   const [items, setItems] = useState<Item[]>([
     {
-      id: 'item-1',
-      nome: 'Azeite de Oliva Extra Virgem 500ml',
-      quantidade: '2 un',
-      origem: 'Guilherme via Alexa às 08:30',
-      categoria: 'Alimento',
+      id: 'shop-1',
+      nome: 'Arroz Integral 5kg',
+      quantidade: '2 pacotes',
+      origem: 'Felipe via Alexa',
+      categoria: 'Alimentos',
       classificacao: 'Invariável (Essencial)',
-      preco: 77.8,
-      subinfo: '~R$ 38,90 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-2',
-      nome: 'Café Especial em Grãos 1kg',
-      quantidade: '1 pct',
-      origem: 'Mariana via Siri às 14:15',
-      categoria: 'Bebidas',
-      classificacao: 'Conforto / Gourmet',
-      preco: 54.9,
-      subinfo: 'Último: R$ 52,00',
+      preco: 58.0,
+      subinfo: 'Est. R$ 58,00',
       comprado: false,
-      naoFaturado: true,
     },
     {
-      id: 'item-3',
-      nome: 'Detergente Lava-Louças Neutro 5L',
+      id: 'shop-2',
+      nome: 'Azeite de Oliva Extra Virgem',
+      quantidade: '1 garrafa',
+      origem: 'Genivânia via Alexa',
+      categoria: 'Alimentos',
+      classificacao: 'Invariável (Essencial)',
+      preco: 45.0,
+      subinfo: 'Est. R$ 45,00',
+      comprado: false,
+    },
+    {
+      id: 'shop-3',
+      nome: 'Detergente e Sabão Omo Líquido 3L',
       quantidade: '1 galão',
-      origem: 'Guilherme via Alexa às 09:12',
+      origem: 'Genivânia via Siri',
       categoria: 'Limpeza',
       classificacao: 'Invariável (Essencial)',
-      preco: 29.9,
-      subinfo: 'Est. R$ 29,90',
+      preco: 40.0,
+      subinfo: 'Est. R$ 40,00',
       comprado: false,
     },
     {
-      id: 'item-4',
-      nome: 'Filé de Peito de Frango-Sassami',
-      quantidade: '3 kg',
-      origem: 'Mariana via Siri ontem',
-      categoria: 'Alimento',
-      classificacao: 'Invariável (Essencial)',
-      preco: 62.7,
-      subinfo: 'R$ 20,90 / kg',
-      comprado: true,
+      id: 'shop-4',
+      nome: 'Café em Grãos Especial 500g',
+      quantidade: '2 pacotes',
+      origem: 'Felipe via Siri',
+      categoria: 'Alimentos',
+      classificacao: 'Conforto / Gourmet',
+      preco: 38.0,
+      subinfo: 'Est. R$ 38,00',
+      comprado: false,
     },
     {
-      id: 'item-5',
-      nome: 'Papel Higiênico Folha Tripla 24-rolos',
-      quantidade: '1 fardo',
-      origem: 'Guilherme via Alexa',
-      categoria: 'Higiene',
+      id: 'shop-5',
+      nome: 'Vitamina C efervescente',
+      quantidade: '2 caixas',
+      origem: 'Genivânia via Alexa',
+      categoria: 'Remédio',
       classificacao: 'Invariável (Essencial)',
-      preco: 44.9,
-      subinfo: 'Est. R$ 42,00',
-      comprado: true,
+      preco: 70.0,
+      subinfo: 'Est. R$ 70,00',
+      comprado: false,
     },
   ]);
+
+  // Load from Supabase on Mount
+  useEffect(() => {
+    async function loadCloudList() {
+      const cloud = await fetchShoppingListFromCloud();
+      if (cloud && cloud.length > 0) {
+        setItems(
+          cloud.map((s) => ({
+            id: s.id,
+            nome: s.nome,
+            quantidade: s.quantidade || '1 un',
+            origem: s.origem === 'alexa' ? `${s.adicionadoPor} via Alexa` : s.origem === 'siri' ? `${s.adicionadoPor} via Siri` : `${s.adicionadoPor} (manual)`,
+            categoria: s.categoriaItem || 'Alimentos',
+            classificacao: s.categoriaItem === 'Limpeza' || s.categoriaItem === 'Alimentos' ? 'Invariável (Essencial)' : 'Conforto / Rotina',
+            preco: s.precoEstimado || 0,
+            subinfo: s.precoEstimado ? `Est. ${formatBRL(s.precoEstimado)}` : 'Item da despensa',
+            comprado: Boolean(s.comprado),
+          }))
+        );
+      }
+    }
+    loadCloudList();
+  }, []);
 
   // Additional 7 planned items inside accordion
   const extraItems: Item[] = [
@@ -147,7 +175,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-1',
       nome: 'Arroz Branco Tipo 1 5kg',
       quantidade: '1 pct',
-      origem: 'Guilherme via Alexa',
+      origem: 'Felipe via App',
       categoria: 'Alimento',
       classificacao: 'Invariável (Essencial)',
       preco: 29.9,
@@ -158,7 +186,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-2',
       nome: 'Feijão Carioca Especial 1kg',
       quantidade: '2 pct',
-      origem: 'Mariana via Siri',
+      origem: 'Genivânia via App',
       categoria: 'Alimento',
       classificacao: 'Invariável (Essencial)',
       preco: 17.8,
@@ -169,7 +197,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-3',
       nome: 'Leite Integral UHT 1L',
       quantidade: '12 un',
-      origem: 'Guilherme via Alexa',
+      origem: 'Felipe via App',
       categoria: 'Alimento',
       classificacao: 'Invariável (Essencial)',
       preco: 58.8,
@@ -180,7 +208,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-4',
       nome: 'Ovos Vermelhos Grandes 30un',
       quantidade: '1 bandeja',
-      origem: 'Mariana via Siri',
+      origem: 'Genivânia via App',
       categoria: 'Alimento',
       classificacao: 'Invariável (Essencial)',
       preco: 22.9,
@@ -191,7 +219,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-5',
       nome: 'Sabão em Pó Ação Total 2,4kg',
       quantidade: '1 cx',
-      origem: 'Guilherme via Alexa',
+      origem: 'Felipe via App',
       categoria: 'Limpeza',
       classificacao: 'Invariável (Essencial)',
       preco: 31.9,
@@ -202,7 +230,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-6',
       nome: 'Desinfetante Floral 2L',
       quantidade: '1 frasco',
-      origem: 'Mariana via Siri',
+      origem: 'Genivânia via App',
       categoria: 'Limpeza',
       classificacao: 'Invariável (Essencial)',
       preco: 14.5,
@@ -213,7 +241,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       id: 'item-extra-7',
       nome: 'Esponja Multiuso Pacote c/ 4',
       quantidade: '1 pct',
-      origem: 'Guilherme via Alexa',
+      origem: 'Felipe via App',
       categoria: 'Limpeza',
       classificacao: 'Invariável (Essencial)',
       preco: 6.9,
@@ -223,54 +251,76 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
   ];
 
   // Toggle item status
-  const handleToggleItem = (id: string) => {
+  const handleToggleItem = async (id: string) => {
+    const target = items.find((it) => it.id === id);
+    if (!target) return;
+    const nextState = !target.comprado;
     setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, comprado: !it.comprado } : it))
+      prev.map((it) => (it.id === id ? { ...it, comprado: nextState } : it))
     );
+    await toggleShoppingItemInCloud(id, nextState);
   };
 
   // Add Item via form
-  const handleInsertItem = (e: React.FormEvent) => {
+  const handleInsertItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemInput.trim()) return;
 
-    const newItem: Item = {
-      id: 'item-' + Date.now(),
-      nome: newItemInput.trim(),
+    const nome = newItemInput.trim();
+    const cloudItem = await addShoppingItemToCloud({
+      nome,
       quantidade: '1 un',
-      origem: 'Guilherme via Digitação Rápida',
+      categoriaItem: newCategory,
+      adicionadoPor: 'Felipe',
+      origem: 'manual',
+      precoEstimado: 25.0,
+    });
+
+    const newItem: Item = {
+      id: cloudItem?.id || ('item-' + Date.now()),
+      nome,
+      quantidade: '1 un',
+      origem: 'Felipe (manual)',
       categoria: newCategory,
       classificacao: newCategory === 'Conforto/Lazer' ? 'Conforto / Gourmet' : 'Invariável (Essencial)',
-      preco: 19.9,
-      subinfo: 'Est. R$ 19,90',
+      preco: 25.0,
+      subinfo: 'Est. R$ 25,00',
       comprado: false,
     };
 
     setItems((prev) => [newItem, ...prev]);
     setNewItemInput('');
-    triggerToast(`"${newItem.nome}" adicionado com sucesso!`);
+    triggerToast(`"${newItem.nome}" adicionado e sincronizado ao Supabase!`);
   };
 
   // Voice Simulation
-  const handleVoiceWaveClick = () => {
+  const handleVoiceWaveClick = async () => {
     setIsListening(true);
     triggerToast('Escutando comando de voz: "Alexa, adicionar leite à lista"...');
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsListening(false);
-      const voiceItem: Item = {
-        id: 'item-voice-' + Date.now(),
+      const cloudItem = await addShoppingItemToCloud({
         nome: 'Leite Desnatado 1L (6 un)',
         quantidade: '6 un',
-        origem: 'Guilherme via Alexa Echo Dot',
-        categoria: 'Alimento',
+        categoriaItem: 'Alimentos',
+        adicionadoPor: 'Felipe',
+        origem: 'alexa',
+        precoEstimado: 29.4,
+      });
+      const voiceItem: Item = {
+        id: cloudItem?.id || ('item-voice-' + Date.now()),
+        nome: 'Leite Desnatado 1L (6 un)',
+        quantidade: '6 un',
+        origem: 'Felipe via Alexa Echo Dot',
+        categoria: 'Alimentos',
         classificacao: 'Invariável (Essencial)',
         preco: 29.4,
         subinfo: 'R$ 4,90 / un',
         comprado: false,
       };
       setItems((prev) => [voiceItem, ...prev]);
-      triggerToast('Item reconhecido pela Alexa e sincronizado à lista!');
-    }, 2000);
+      triggerToast('Item reconhecido pela Alexa e sincronizado ao Supabase!');
+    }, 1500);
   };
 
   // Filter items
@@ -1056,29 +1106,29 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
               </span>
             </div>
 
-            {/* Split Footer: Rateio do Cupom Atacadão R$ 243,95 cada */}
+            {/* Footer: Despesa Conjunta Atacadão */}
             <div className="pt-3 border-t border-[#f1f5f9] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex items-center -space-x-1.5">
-                  <div className="w-6 h-6 rounded-full bg-[#006948] text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-white">
-                    G
+                  <div className="w-6 h-6 rounded-full bg-[#2563eb] text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-white">
+                    F
                   </div>
-                  <div className="w-6 h-6 rounded-full bg-[#006194] text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-white">
-                    M
+                  <div className="w-6 h-6 rounded-full bg-[#ec4899] text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-white">
+                    G
                   </div>
                 </div>
 
                 <div className="flex flex-col">
-                  <span className="font-bold text-xs text-[#0b1c30]">Rateio do Cupom Atacadão</span>
-                  <span className="text-[10px] text-[#565e74]">Divisão Paritária 50/50</span>
+                  <span className="font-bold text-xs text-[#0b1c30]">Despesa Compartilhada</span>
+                  <span className="text-[10px] text-[#565e74]">Orçamento Conjunto 50/50</span>
                 </div>
               </div>
 
               <div className="flex flex-col items-end text-right">
                 <span className="font-display font-bold text-xs sm:text-sm text-[#0b1c30] tnum">
-                  R$ 243,95 cada
+                  R$ 487,90
                 </span>
-                <span className="text-[10px] text-[#006948] font-semibold">Liquidado via NuConta</span>
+                <span className="text-[10px] text-[#006948] font-semibold">Conta do Casal</span>
               </div>
             </div>
           </div>
@@ -1245,14 +1295,14 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
                   </div>
                 </div>
 
-                {/* 2. Drogasil Jardins */}
+                {/* 2. Drogasil Jóquei */}
                 <div className="p-2.5 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center shrink-0">
                       <Check className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-bold text-xs text-[#0b1c30]">Drogasil Jardins</span>
+                      <span className="font-bold text-xs text-[#0b1c30]">Drogasil Jóquei</span>
                       <span className="text-[10px] text-[#565e74]">12/03 • 100% aderência</span>
                     </div>
                   </div>
@@ -1289,8 +1339,8 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
             <div className="p-3 bg-[#eff4ff] border border-[#dce9ff] rounded-xl flex items-start gap-2.5 text-xs text-[#565e74]">
               <Lightbulb className="w-4 h-4 text-[#006194] shrink-0 mt-0.5" />
               <span>
-                Ao não ir com fome ao mercado, compras de impulso diminuíram{' '}
-                <strong className="text-[#0b1c30]">63%</strong> entre Guilherme e Mariana.
+                Ao planejar a lista antes de ir às compras, itens não essenciais foram reduzidos em{' '}
+                <strong className="text-[#0b1c30]">63%</strong> por Felipe e Genivânia.
               </span>
             </div>
           </div>
@@ -1337,7 +1387,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
 
               <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
                 <div>
-                  <span className="font-bold text-[#0b1c30]">Drogasil Jardins #4301</span>
+                  <span className="font-bold text-[#0b1c30]">Drogasil Jóquei #4301</span>
                   <div className="text-[10px] text-[#565e74]">12/03/2026 • 100% fidelidade</div>
                 </div>
                 <span className="font-bold text-[#0b1c30]">R$ 138,40</span>
@@ -1353,7 +1403,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
 
               <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
                 <div>
-                  <span className="font-bold text-[#0b1c30]">Pão de Açúcar #7721</span>
+                  <span className="font-bold text-[#0b1c30]">Carvalho Super #7721</span>
                   <div className="text-[10px] text-[#565e74]">26/02/2026 • 89% fidelidade</div>
                 </div>
                 <span className="font-bold text-[#0b1c30]">R$ 215,80</span>
@@ -1391,7 +1441,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
 
         <div className="flex items-center gap-4 text-[11px]">
           <span className="hover:text-[#0b1c30] cursor-pointer">Auditoria Fiscal</span>
-          <span className="hover:text-[#0b1c30] cursor-pointer">Regras de Rateio</span>
+          <span className="hover:text-[#0b1c30] cursor-pointer">Gestão Conjunta 50/50</span>
           <span className="hover:text-[#0b1c30] cursor-pointer">Exportar Relatório Mensal</span>
         </div>
       </footer>
