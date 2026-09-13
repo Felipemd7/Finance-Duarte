@@ -190,6 +190,11 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   ]);
 
   // UI state
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [leftViewMode, setLeftViewMode] = useState<'photo' | 'paper'>('photo');
+  const [scanStepMessage, setScanStepMessage] = useState<string>('');
   const [isScanningFile, setIsScanningFile] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
   const [showEditItemsModal, setShowEditItemsModal] = useState(false);
@@ -201,7 +206,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 3500);
+    }, 4000);
   };
 
   const handleTriggerFileInput = () => {
@@ -210,36 +215,177 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     }
   };
 
+  const processFile = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      showToast('Por favor, selecione uma imagem (JPG, PNG, WEBP) ou documento PDF.');
+      return;
+    }
+
+    setUploadedFileName(file.name);
+    setIsScanningFile(true);
+    setScanStepMessage(`Carregando "${file.name}"...`);
+    showToast(`Carregando "${file.name}"...`);
+
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setIsScanningFile(false);
+      setScanStepMessage('');
+      showToast('Erro ao ler o arquivo selecionado.');
+    };
+
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      setUploadedImage(base64);
+      setLeftViewMode('photo');
+      setScanStepMessage('Gemini Vision OCR analisando cabeçalho, produtos e valores...');
+      showToast('IA examinando comprovante com visão computacional...');
+
+      try {
+        const response = await fetch('/api/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mimeType: file.type || 'image/jpeg',
+          }),
+        });
+
+        const json = await response.json();
+        if (json.success && json.data) {
+          const d = json.data;
+          const mappedItems = (d.itens || []).map((it: any, idx: number) => {
+            const isRemedio =
+              (it.categoriaItem || '').toLowerCase().includes('reméd') ||
+              (it.categoriaItem || '').toLowerCase().includes('farm') ||
+              (it.subcategoriaSugerida || '').toLowerCase().includes('farm');
+            return {
+              id: it.id || `it-${Date.now()}-${idx}`,
+              nome: it.nome || 'Produto / Item',
+              codEan: it.codigoEan || '',
+              qtd: Number(it.quantidade) || 1,
+              unitario: Number(it.precoUnitario) || Number(it.precoTotal) || 0,
+              subtotal: Number(it.precoTotal) || 0,
+              categoria: it.categoriaItem || it.subcategoriaSugerida || 'Alimentos (Supermercado / Variável)',
+              icon: isRemedio ? 'pill' : 'utensils',
+              categoriaColor: isRemedio
+                ? 'bg-[#fee2e2] text-[#dc2626] border-[#fecdd3]'
+                : 'bg-[#ecfdf5] text-[#006948] border-[#a7f3d0]',
+              desmembrado: !!it.desmembrado,
+              aviso: it.motivoDesmembramento || undefined,
+            };
+          });
+
+          const totalCalculated =
+            Number(d.valorTotal) ||
+            mappedItems.reduce((sum: number, it: any) => sum + (it.subtotal || 0), 0);
+
+          setExtractedReceipt({
+            id: `nfc-${Date.now()}`,
+            numeroCupom:
+              d.numeroCupom && d.numeroCupom !== 'Não identificado'
+                ? d.numeroCupom
+                : `NFC-e #${Math.floor(10000 + Math.random() * 90000)}`,
+            dataHora:
+              d.data && d.data !== 'Não identificado'
+                ? d.data
+                : new Date().toLocaleDateString('pt-BR') +
+                  ' ' +
+                  new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            estabelecimento:
+              d.estabelecimento && d.estabelecimento !== 'Não identificado'
+                ? d.estabelecimento
+                : 'Estabelecimento Identificado',
+            cnpj: d.cnpj && d.cnpj !== 'Não identificado' ? d.cnpj : '',
+            ie: d.ie || '',
+            endereco: d.endereco && d.endereco !== 'Não identificado' ? d.endereco : 'Teresina, PI',
+            ccf: d.ccf || '',
+            totalLido: totalCalculated,
+            meioPagamento:
+              d.formaPagamento && d.formaPagamento !== 'Não identificado'
+                ? d.formaPagamento
+                : 'Cartão de Crédito NuBank •• 8821',
+            comprador:
+              d.comprador && d.comprador !== 'Não identificado'
+                ? d.comprador
+                : 'Felipe Duarte',
+            itens: mappedItems,
+          });
+
+          setHistoryDocs((prev) => [
+            {
+              id: `doc-${Date.now()}`,
+              dataHora:
+                d.data && d.data !== 'Não identificado'
+                  ? d.data
+                  : new Date().toLocaleDateString('pt-BR'),
+              estabelecimento: d.estabelecimento || 'Comprovante Escaneado',
+              subtitulo: d.tipoEstabelecimento || 'Comprovante Fiscal',
+              tipo: (d.tipoEstabelecimento || '').toLowerCase().includes('farm')
+                ? 'farmacia'
+                : (d.tipoEstabelecimento || '').toLowerCase().includes('posto')
+                ? 'combustivel'
+                : 'mercado',
+              canal: 'Upload OCR (Gemini)',
+              canalIcon: 'mobile',
+              itensLidos: mappedItems.length,
+              valorTotal: totalCalculated,
+              status: 'Pronto para Conciliar',
+              statusColor: 'bg-[#eff4ff] text-[#006194]',
+              hasAlert: false,
+            },
+            ...prev,
+          ]);
+
+          setIsApproved(false);
+          showToast(`Comprovante "${d.estabelecimento}" lido com sucesso! ${mappedItems.length} itens extraídos.`);
+        } else {
+          showToast(json.error || 'Não foi possível extrair dados do comprovante. Tente uma foto mais nítida.');
+        }
+      } catch (err: any) {
+        console.error('OCR Error:', err);
+        showToast('Erro ao comunicar com a IA Gemini para leitura do comprovante.');
+      } finally {
+        setIsScanningFile(false);
+        setScanStepMessage('');
+      }
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsScanningFile(true);
-    showToast(`Processando "${file.name}" com OCR Engine v4.2...`);
-
-    setTimeout(() => {
-      setIsScanningFile(false);
-      setIsApproved(false);
-      showToast('Leitura concluída com 99.2% de precisão! 16 itens identificados.');
-    }, 1600);
+    if (file) {
+      processFile(file);
+      e.target.value = '';
+    }
   };
 
   const handleApprove = () => {
     setIsApproved(true);
     showToast('Cupom aprovado e conciliado com a Conta Central do Casal!');
 
+    const isFarmacia =
+      extractedReceipt.estabelecimento.toLowerCase().includes('farm') ||
+      extractedReceipt.estabelecimento.toLowerCase().includes('droga');
+    const isPosto =
+      extractedReceipt.estabelecimento.toLowerCase().includes('posto') ||
+      extractedReceipt.estabelecimento.toLowerCase().includes('combust');
+
     const approvedReceiptObj: Receipt = {
-      id: `rec-${Date.now()}`,
-      data: '2026-03-14',
+      id: extractedReceipt.id || `rec-${Date.now()}`,
+      data: extractedReceipt.dataHora || new Date().toISOString(),
       estabelecimento: extractedReceipt.estabelecimento,
-      tipoEstabelecimento: 'Supermercado',
+      tipoEstabelecimento: isFarmacia ? 'Farmácia' : isPosto ? 'Posto de combustível' : 'Supermercado',
       numeroCupom: extractedReceipt.numeroCupom,
       valorTotal: extractedReceipt.totalLido,
       status: 'Conciliado',
+      imagemUrl: uploadedImage || undefined,
       itens: extractedReceipt.itens.map((it, idx) => ({
-        id: `pi-${idx}`,
+        id: it.id || `pi-${idx}`,
         nome: it.nome,
-        categoriaItem: it.desmembrado ? 'Remédio' : 'Alimentos',
+        categoriaItem: it.desmembrado ? 'Remédio' : it.categoria,
         quantidade: it.qtd,
         precoUnitario: it.unitario,
         precoTotal: it.subtotal,
@@ -491,17 +637,36 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           </div>
         </div>
 
-        {/* Upload Card (Full width because user specified "não precisa da captura rapida via celular") */}
-        <div className="bg-[#f8faff] rounded-2xl p-8 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.02)] mb-8 text-center flex flex-col items-center justify-center relative">
-          <div className="w-14 h-14 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center mb-3">
+        {/* Upload Card com Drag & Drop e Status Real */}
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const dropped = e.dataTransfer.files?.[0];
+            if (dropped) processFile(dropped);
+          }}
+          className={`rounded-2xl p-8 border-2 transition-all mb-8 text-center flex flex-col items-center justify-center relative ${
+            isDragging
+              ? 'border-[#006948] bg-[#ecfdf5]'
+              : 'border-dashed border-[#cbd5e1] bg-[#f8faff] hover:bg-[#eff4ff]'
+          }`}
+        >
+          <div className="w-14 h-14 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center mb-3 shadow-xs">
             <Upload className="w-7 h-7" />
           </div>
 
           <h3 className="font-display font-bold text-base text-[#0b1c30]">
-            Arraste seu cupom fiscal eletrônico
+            {isScanningFile
+              ? scanStepMessage || 'Processando com Gemini Vision OCR...'
+              : 'Arraste seu comprovante ou cupom fiscal aqui'}
           </h3>
           <p className="text-xs text-[#565e74] mt-1 max-w-md">
-            Suporta NFC-e, SAT, DANFE e recibos em PDF, JPG ou PNG (até 25MB)
+            Suporta NFC-e, SAT, recibos de supermercado, farmácia, postos e filipetas de cartão em JPG, PNG, WEBP ou PDF
           </p>
 
           <div className="flex items-center gap-3 mt-4 flex-wrap justify-center">
@@ -516,9 +681,16 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
             <span className="px-3 py-2 rounded-xl bg-[#eff4ff] text-[#006194] text-xs font-semibold flex items-center gap-1.5 border border-[#dce9ff]">
               <Sparkles className="w-3.5 h-3.5 text-[#006194]" />
-              <span>Processamento em &lt; 2 segundos</span>
+              <span>Gemini 2.5/3.8 Flash Ativo</span>
             </span>
           </div>
+
+          {uploadedFileName && (
+            <div className="mt-3 text-xs text-[#006948] font-medium flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Arquivo atual: <strong>{uploadedFileName}</strong></span>
+            </div>
+          )}
         </div>
 
         {/* Section: Revisão e Validação da IA */}
@@ -530,34 +702,27 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 Revisão e Validação da IA
               </h2>
               <span className="px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#006948] text-[10px] font-bold">
-                Confiança Geral: 99.4%
+                Leitura Multimodal Gemini
               </span>
             </div>
 
             <div className="text-xs text-[#565e74] flex items-center gap-1.5">
-              <span>Clique nos campos à direita para ajustar qualquer categoria ou valor</span>
+              <span>Confira os dados extraídos abaixo antes de aprovar e vincular</span>
             </div>
           </div>
 
           {/* Two-Column Validation Grid */}
           <div className="bg-white rounded-3xl border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)] overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-            {/* Left Column (5 cols): Visual Cupom Fiscal Digitalizado */}
+            {/* Left Column (5 cols): Visual Cupom Fiscal Digitalizado ou Foto Real */}
             <div className="lg:col-span-4 p-5 bg-[#fcfdfe] border-b lg:border-b-0 lg:border-r border-[#e5eeff] flex flex-col justify-between">
               <div>
-                {/* Cupom Header Bar */}
-                <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9] mb-4">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#0b1c30]">
-                    <FileText className="w-4 h-4 text-[#565e74]" />
-                    <span>NFC-e #92819 - Atacadão S/A</span>
+                {/* Cupom Header Bar & View Mode Toggle */}
+                <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9] mb-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#0b1c30] truncate max-w-[200px]">
+                    <FileText className="w-4 h-4 text-[#565e74] shrink-0" />
+                    <span className="truncate">{extractedReceipt.numeroCupom} - {extractedReceipt.estabelecimento}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[#565e74]">
-                    <button
-                      onClick={() => setShowReceiptZoom(true)}
-                      className="p-1 hover:bg-gray-100 rounded cursor-pointer"
-                      title="Ampliar"
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                    </button>
                     <button
                       onClick={() => setShowReceiptZoom(true)}
                       className="p-1 hover:bg-gray-100 rounded cursor-pointer"
@@ -565,93 +730,106 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     >
                       <ZoomIn className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => showToast('Abrindo link oficial da SEFAZ...')}
-                      className="p-1 hover:bg-gray-100 rounded cursor-pointer"
-                      title="Link SEFAZ"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
 
-                {/* Cupom Content Paper */}
-                <div className="bg-[#f0fdf4]/50 border border-[#bbf7d0] rounded-2xl p-4 font-mono text-[11px] text-[#0b1c30] space-y-2 relative">
-                  <div className="text-center pb-2 border-b border-dashed border-[#86efac]">
-                    <span className="px-2 py-0.5 rounded bg-[#005a3c] text-white text-[9px] font-bold uppercase inline-block mb-1">
-                      Estabelecimento Detectado
-                    </span>
-                    <h4 className="font-bold text-xs">ATACADÃO DISTRIBUIÇÃO S/A</h4>
-                    <p className="text-[10px] text-[#565e74]">
-                      Av. Duque de Caxias, 2800 - Teresina, PI
-                    </p>
-                    <p className="text-[10px] text-[#565e74]">
-                      CNPJ: 75.315.333/0045-89 • IE: 86.492.110
-                    </p>
-                  </div>
+                {/* Toggle: Foto vs Transcrição */}
+                <div className="flex items-center gap-1 bg-[#f1f5f9] p-1 rounded-xl mb-3 text-[11px] font-semibold">
+                  <button
+                    onClick={() => setLeftViewMode('photo')}
+                    className={`flex-1 py-1 px-2 rounded-lg transition-all cursor-pointer ${
+                      leftViewMode === 'photo'
+                        ? 'bg-white text-[#006948] font-bold shadow-xs'
+                        : 'text-[#565e74] hover:text-[#0b1c30]'
+                    }`}
+                  >
+                    📷 Foto do Comprovante
+                  </button>
+                  <button
+                    onClick={() => setLeftViewMode('paper')}
+                    className={`flex-1 py-1 px-2 rounded-lg transition-all cursor-pointer ${
+                      leftViewMode === 'paper'
+                        ? 'bg-white text-[#006948] font-bold shadow-xs'
+                        : 'text-[#565e74] hover:text-[#0b1c30]'
+                    }`}
+                  >
+                    📄 Cupom Estruturado
+                  </button>
+                </div>
 
-                  <div className="flex justify-between text-[10px] text-[#565e74] pb-1 border-b border-dashed border-[#86efac]">
-                    <span>EMISSÃO: 14/03/2026 11:28</span>
-                    <span className="bg-[#eff4ff] text-[#006194] px-1 rounded font-bold">Data Fiscal</span>
-                    <span>CCF: 039841</span>
-                  </div>
-
-                  {/* Cupom Items Print */}
-                  <div className="space-y-1.5 py-1 text-[10px]">
-                    <div className="flex justify-between">
-                      <span className="truncate pr-2">001 ARROZ TIPO 1 5KG (2x 28.90)</span>
-                      <span className="font-bold">57,80</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="truncate pr-2">002 AZEITE EXTRA VIRGEM 500ML</span>
-                      <span className="font-bold">42,50</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="truncate pr-2">003 SABAO LIQUIDO OMO 3L</span>
-                      <span className="font-bold">38,90</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="truncate pr-2">004 SHAMPOO DOVE 400ML (2x 22.00)</span>
-                      <span className="font-bold">44,00</span>
-                    </div>
-                    <div className="flex justify-between text-[#dc2626] font-bold bg-[#fee2e2]/60 px-1 py-0.5 rounded">
-                      <span className="truncate pr-2">005 DIPIRONA 500MG C/20 COMP</span>
-                      <span>8,50</span>
-                    </div>
-                    <div className="text-center text-[9px] text-[#565e74] italic pt-1">
-                      + 12 outros itens alimentícios e mercearia processados
+                {leftViewMode === 'photo' && uploadedImage ? (
+                  /* Visualização da Imagem Real Anexada */
+                  <div className="relative rounded-2xl overflow-hidden border border-[#e5eeff] bg-black/5 flex flex-col items-center justify-center p-2 min-h-[380px]">
+                    <img
+                      src={uploadedImage}
+                      alt="Comprovante Anexado"
+                      className="max-h-[360px] w-auto object-contain rounded-xl shadow-xs"
+                    />
+                    <div className="w-full mt-2 py-1 px-2.5 bg-white/90 backdrop-blur-xs rounded-xl border border-[#e5eeff] flex items-center justify-between text-[11px] text-[#0b1c30]">
+                      <span className="font-semibold truncate max-w-[160px]">{uploadedFileName || 'Comprovante'}</span>
+                      <button
+                        onClick={() => setShowReceiptZoom(true)}
+                        className="text-[#006194] hover:underline font-bold text-[10px]"
+                      >
+                        Ampliar Foto
+                      </button>
                     </div>
                   </div>
-
-                  {/* Total Box in Cupom */}
-                  <div className="bg-[#dcfce7] rounded-xl p-2.5 border border-[#86efac] mt-2">
-                    <div className="text-[10px] font-bold text-[#006948] uppercase">
-                      Total & Pagamento
-                    </div>
-                    <div className="flex justify-between items-baseline mt-0.5">
-                      <span className="font-bold text-xs">TOTAL R$</span>
-                      <span className="font-extrabold text-base font-mono text-[#005a3c]">
-                        487,90
+                ) : (
+                  /* Cupom Content Paper Digitalizado */
+                  <div className="bg-[#f0fdf4]/50 border border-[#bbf7d0] rounded-2xl p-4 font-mono text-[11px] text-[#0b1c30] space-y-2 relative">
+                    <div className="text-center pb-2 border-b border-dashed border-[#86efac]">
+                      <span className="px-2 py-0.5 rounded bg-[#005a3c] text-white text-[9px] font-bold uppercase inline-block mb-1">
+                        Estabelecimento
                       </span>
+                      <h4 className="font-bold text-xs">{extractedReceipt.estabelecimento}</h4>
+                      {extractedReceipt.endereco && (
+                        <p className="text-[10px] text-[#565e74]">
+                          {extractedReceipt.endereco}
+                        </p>
+                      )}
+                      {extractedReceipt.cnpj && (
+                        <p className="text-[10px] text-[#565e74]">
+                          CNPJ: {extractedReceipt.cnpj}
+                        </p>
+                      )}
                     </div>
-                    <div className="text-[9px] text-[#565e74] mt-1 flex justify-between">
-                      <span>Forma: Cartão de Crédito</span>
-                      <span>Mastercard Final 8821</span>
-                    </div>
-                  </div>
 
-                  {/* Barcode Mock */}
-                  <div className="pt-2 text-center">
-                    <div className="h-6 w-full flex items-center justify-center gap-1 opacity-70">
-                      {[12, 24, 8, 16, 20, 10, 14, 22, 18, 12, 16, 24, 10].map((h, i) => (
-                        <div key={i} style={{ height: `${h}px` }} className="w-1 bg-black" />
+                    <div className="flex justify-between text-[10px] text-[#565e74] pb-1 border-b border-dashed border-[#86efac]">
+                      <span>EMISSÃO: {extractedReceipt.dataHora}</span>
+                      <span className="bg-[#eff4ff] text-[#006194] px-1 rounded font-bold">Auditoria IA</span>
+                      <span>{extractedReceipt.numeroCupom}</span>
+                    </div>
+
+                    {/* Cupom Items Print */}
+                    <div className="space-y-1.5 py-1 text-[10px] max-h-[220px] overflow-y-auto pr-1">
+                      {extractedReceipt.itens.map((it, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span className="truncate pr-2">
+                            {idx + 1}. {it.nome} {it.qtd > 1 ? `(${it.qtd}x)` : ''}
+                          </span>
+                          <span className="font-bold shrink-0">{formatBRL(it.subtotal)}</span>
+                        </div>
                       ))}
                     </div>
-                    <span className="text-[8px] tracking-wider text-gray-500 block mt-1">
-                      3326 0375 3153 3380 4589 6500 1800 9281 9118 4879 01
-                    </span>
+
+                    {/* Total Box in Cupom */}
+                    <div className="bg-[#dcfce7] rounded-xl p-2.5 border border-[#86efac] mt-2">
+                      <div className="text-[10px] font-bold text-[#006948] uppercase">
+                        Total & Pagamento
+                      </div>
+                      <div className="flex justify-between items-baseline mt-0.5">
+                        <span className="font-bold text-xs">TOTAL R$</span>
+                        <span className="font-extrabold text-base font-mono text-[#005a3c]">
+                          {formatBRL(extractedReceipt.totalLido)}
+                        </span>
+                      </div>
+                      <div className="text-[9px] text-[#565e74] mt-1 flex justify-between">
+                        <span>Forma: {extractedReceipt.meioPagamento}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -662,7 +840,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pb-5 border-b border-[#f1f5f9]">
                   <div>
                     <span className="text-[10px] text-[#565e74] block">Estabelecimento</span>
-                    <span className="font-bold text-xs text-[#0b1c30] block mt-0.5">
+                    <span className="font-bold text-xs text-[#0b1c30] block mt-0.5 truncate" title={extractedReceipt.estabelecimento}>
                       {extractedReceipt.estabelecimento}
                     </span>
                   </div>
@@ -670,22 +848,22 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   <div>
                     <span className="text-[10px] text-[#565e74] block">Data da Compra</span>
                     <span className="font-bold text-xs text-[#0b1c30] block mt-0.5">
-                      14/03/2026
+                      {extractedReceipt.dataHora.slice(0, 10)}
                     </span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-[#565e74] block">Meio de Pgto</span>
-                    <span className="font-bold text-xs text-[#0b1c30] block mt-0.5">
+                    <span className="font-bold text-xs text-[#0b1c30] block mt-0.5 truncate" title={extractedReceipt.meioPagamento}>
                       {extractedReceipt.meioPagamento}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-[#565e74] block">Comprador</span>
+                    <span className="text-[10px] text-[#565e74] block">Quem Pagou</span>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <div className="w-4 h-4 rounded-full bg-[#006194] text-white font-bold text-[9px] flex items-center justify-center">
-                        M
+                      <div className="w-4 h-4 rounded-full bg-[#006948] text-white font-bold text-[9px] flex items-center justify-center">
+                        {extractedReceipt.comprador.toLowerCase().includes('genivânia') ? 'G' : 'F'}
                       </div>
                       <span className="font-bold text-xs text-[#0b1c30]">
                         {extractedReceipt.comprador}
@@ -701,19 +879,19 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                       Itens Identificados e Categorizados
                     </h3>
                     <span className="px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-[10px] font-bold">
-                      5 de 16 exibidos
+                      {extractedReceipt.itens.length} {extractedReceipt.itens.length === 1 ? 'item extraído' : 'itens extraídos'}
                     </span>
                   </div>
 
                   <span className="text-[11px] font-bold text-[#006948] bg-[#ecfdf5] px-2.5 py-1 rounded-full border border-[#a7f3d0]">
-                    ✓ Despesa 50/50 do Casal
+                    ✓ Gestão Compartilhada 50/50
                   </span>
                 </div>
 
                 {/* Extracted Items Table */}
-                <div className="border border-[#e5eeff] rounded-2xl overflow-hidden mb-4">
+                <div className="border border-[#e5eeff] rounded-2xl overflow-hidden mb-4 max-h-[340px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-[#f8faff] border-b border-[#e5eeff] text-[#565e74] uppercase text-[10px] font-bold">
+                    <thead className="bg-[#f8faff] border-b border-[#e5eeff] text-[#565e74] uppercase text-[10px] font-bold sticky top-0 bg-[#f8faff] z-10">
                       <tr>
                         <th className="py-2.5 px-3">DESCRIÇÃO DO ITEM</th>
                         <th className="py-2.5 px-2 text-center">QTD</th>
@@ -725,7 +903,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     </thead>
                     <tbody className="divide-y divide-[#f1f5f9]">
                       {extractedReceipt.itens.map((it, idx) => (
-                        <tr key={idx} className="hover:bg-[#f8faff] transition-colors">
+                        <tr key={it.id || idx} className="hover:bg-[#f8faff] transition-colors">
                           <td className="py-2.5 px-3 font-semibold text-[#0b1c30]">
                             {it.nome}
                           </td>
@@ -736,7 +914,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                             {formatBRL(it.unitario)}
                           </td>
                           <td className="py-2.5 px-2 font-bold text-[#0b1c30]">
-                            {formatBRL(it.total)}
+                            {formatBRL(it.subtotal)}
                           </td>
                           <td className="py-2.5 px-3">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eff4ff] text-[#006194]">
@@ -991,7 +1169,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           <div
             id="modal-receipt-zoom-card"
             onClick={(e) => e.stopPropagation()}
-            className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative"
+            className="bg-white w-full max-w-lg rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto"
           >
             <button
               onClick={() => setShowReceiptZoom(false)}
@@ -1001,36 +1179,46 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             </button>
 
             <h4 className="font-display font-bold text-base text-[#0b1c30] mb-2">
-              Visualização da NFC-e Digital
+              {uploadedImage ? 'Foto do Comprovante em Alta Resolução' : 'Visualização da NFC-e Digital'}
             </h4>
 
-            <div className="bg-[#fafafa] border border-dashed border-gray-400 rounded-2xl p-4 font-mono text-xs text-gray-700 space-y-2">
-              <div className="text-center pb-2 border-b border-gray-300">
-                <span className="font-bold text-sm block">ATACADÃO DISTRIBUIÇÃO S/A</span>
-                <span>CNPJ: 75.315.333/0045-89</span>
-                <span className="block text-[10px] text-gray-500">
-                  {extractedReceipt.numeroCupom} • {extractedReceipt.dataHora}
-                </span>
+            {uploadedImage ? (
+              <div className="rounded-2xl overflow-hidden border border-[#e5eeff] bg-black/5 p-2 flex justify-center">
+                <img
+                  src={uploadedImage}
+                  alt="Comprovante"
+                  className="max-h-[65vh] w-auto object-contain rounded-xl"
+                />
               </div>
+            ) : (
+              <div className="bg-[#fafafa] border border-dashed border-gray-400 rounded-2xl p-4 font-mono text-xs text-gray-700 space-y-2">
+                <div className="text-center pb-2 border-b border-gray-300">
+                  <span className="font-bold text-sm block">{extractedReceipt.estabelecimento}</span>
+                  {extractedReceipt.cnpj && <span>CNPJ: {extractedReceipt.cnpj}</span>}
+                  <span className="block text-[10px] text-gray-500">
+                    {extractedReceipt.numeroCupom} • {extractedReceipt.dataHora}
+                  </span>
+                </div>
 
-              <div className="space-y-1 py-2 border-b border-gray-300 text-[11px]">
-                {extractedReceipt.itens.map((it) => (
-                  <div key={it.id} className="flex justify-between">
-                    <span className="truncate pr-2">{it.nome}</span>
-                    <span className="font-bold shrink-0">{formatBRL(it.subtotal)}</span>
-                  </div>
-                ))}
-              </div>
+                <div className="space-y-1 py-2 border-b border-gray-300 text-[11px]">
+                  {extractedReceipt.itens.map((it) => (
+                    <div key={it.id} className="flex justify-between">
+                      <span className="truncate pr-2">{it.nome}</span>
+                      <span className="font-bold shrink-0">{formatBRL(it.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
 
-              <div className="flex justify-between font-bold text-sm pt-1">
-                <span>TOTAL R$</span>
-                <span>{formatBRL(extractedReceipt.totalLido)}</span>
-              </div>
+                <div className="flex justify-between font-bold text-sm pt-1">
+                  <span>TOTAL R$</span>
+                  <span>{formatBRL(extractedReceipt.totalLido)}</span>
+                </div>
 
-              <div className="pt-2 text-center text-[10px] text-gray-500">
-                FORMA: {extractedReceipt.meioPagamento}
+                <div className="pt-2 text-center text-[10px] text-gray-500">
+                  FORMA: {extractedReceipt.meioPagamento}
+                </div>
               </div>
-            </div>
+            )}
 
             <button
               onClick={() => setShowReceiptZoom(false)}

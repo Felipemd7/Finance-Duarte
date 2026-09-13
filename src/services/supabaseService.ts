@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { User, Transaction, FinancialGoal, ShoppingListItem, FuelLog, SpreadsheetRow, PurchaseItem } from '../types';
+import { User, Transaction, FinancialGoal, ShoppingListItem, FuelLog, SpreadsheetRow, PurchaseItem, Receipt } from '../types';
 
 export interface LoadedSupabaseData {
   users: User[];
@@ -482,6 +482,80 @@ export async function deleteFuelLogFromCloud(id: string): Promise<boolean> {
     return !error;
   } catch (err) {
     console.error('[SupabaseService] Erro ao excluir abastecimento:', err);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------
+// COMPROVANTES FISCAIS & OCR IA (Persistência no Supabase)
+// ---------------------------------------------------------
+
+export async function saveScannedReceiptToCloud(
+  receipt: Receipt,
+  transaction: Transaction
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    // 1. Salvar Transação no Supabase
+    const { error: txErr } = await supabase.from('transactions').insert({
+      id: transaction.id,
+      usuario_id: transaction.pagoPor?.toLowerCase().includes('genivânia') ? 'usr-genivania' : 'usr-felipe',
+      data: transaction.data.slice(0, 10),
+      mes_referencia: transaction.data.slice(0, 7),
+      valor: transaction.valor,
+      tipo: 'despesa',
+      forma_pagamento: 'credito',
+      status: 'pago',
+      categoria_id: 'cat-variavel',
+      subcategoria_id:
+        receipt.tipoEstabelecimento === 'Farmácia'
+          ? 'sub-farmacia'
+          : receipt.tipoEstabelecimento === 'Posto de combustível'
+          ? 'sub-combustivel'
+          : 'sub-supermercado',
+      estabelecimento_nome: receipt.estabelecimento,
+      observacoes: transaction.observacoes || null,
+      comprovante_id: receipt.id,
+    });
+
+    if (txErr) console.warn('[SupabaseService] Erro ao inserir transação do comprovante:', txErr);
+
+    // 2. Salvar Comprovante
+    const { error: recErr } = await supabase.from('receipts').insert({
+      id: receipt.id,
+      transacao_id: transaction.id,
+      estabelecimento_nome: receipt.estabelecimento,
+      estabelecimento_tipo: receipt.tipoEstabelecimento,
+      data: receipt.data.slice(0, 10),
+      valor_total: receipt.valorTotal,
+      numero_cupom: receipt.numeroCupom || null,
+      status: 'Conciliado',
+      imagem_url: receipt.imagemUrl || null,
+      dados_brutos: JSON.stringify(receipt.itens || []),
+    });
+
+    if (recErr) console.warn('[SupabaseService] Erro ao inserir comprovante:', recErr);
+
+    // 3. Salvar itens detalhados da compra se houver
+    if (receipt.itens && receipt.itens.length > 0) {
+      const itemsToInsert = receipt.itens.map((it, idx) => ({
+        id: `pi-${Date.now()}-${idx}`,
+        transacao_id: transaction.id,
+        nome_do_item: it.nome,
+        categoria_item: it.categoriaItem || 'Outros',
+        quantidade: it.quantidade || 1,
+        preco_unitario: it.precoUnitario || 0,
+        preco_total: it.precoTotal || 0,
+        unidade: it.unidade || 'un',
+      }));
+
+      const { error: itemsErr } = await supabase.from('purchase_items').insert(itemsToInsert);
+      if (itemsErr) console.warn('[SupabaseService] Erro ao inserir itens de compra:', itemsErr);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('[SupabaseService] Falha ao persistir comprovante escaneado:', err);
     return false;
   }
 }

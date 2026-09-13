@@ -436,10 +436,10 @@ app.post('/api/scan-receipt', async (req, res) => {
             },
           ],
           divisaoCasal: {
-            porcentagemGuilherme: 50,
-            porcentagemMariana: 50,
-            valorGuilherme: 92.3,
-            valorMariana: 92.3,
+            porcentagemFelipe: 50,
+            porcentagemGenivania: 50,
+            valorFelipe: 92.3,
+            valorGenivania: 92.3,
           },
         },
       });
@@ -499,10 +499,10 @@ app.post('/api/scan-receipt', async (req, res) => {
             },
           ],
           divisaoCasal: {
-            porcentagemGuilherme: 50,
-            porcentagemMariana: 50,
-            valorGuilherme: 174.75,
-            valorMariana: 174.75,
+            porcentagemFelipe: 50,
+            porcentagemGenivania: 50,
+            valorFelipe: 174.75,
+            valorGenivania: 174.75,
           },
         },
       });
@@ -531,7 +531,7 @@ app.post('/api/scan-receipt', async (req, res) => {
     else if (detectedMime.includes('pdf')) validMime = 'application/pdf';
     else validMime = 'image/jpeg';
 
-    const prompt = `Você é o mais avançado especialista em OCR e auditoria de documentos fiscais e comprovantes de pagamento do Brasil para casais (Guilherme e Mariana).
+    const prompt = `Você é o mais avançado especialista em OCR e auditoria de documentos fiscais e comprovantes de pagamento do Brasil para o Casal Duarte (Felipe Duarte e Genivânia Duarte).
 Analise a imagem deste documento com máxima precisão e extraia todos os dados disponíveis.
 
 O documento pode ser:
@@ -692,10 +692,10 @@ INSTRUÇÕES RIGOROSAS:
       ...parsedData,
       itens: itensWithIds,
       divisaoCasal: {
-        porcentagemGuilherme: 50,
-        porcentagemMariana: 50,
-        valorGuilherme: Number((total / 2).toFixed(2)),
-        valorMariana: Number((total / 2).toFixed(2)),
+        porcentagemFelipe: 50,
+        porcentagemGenivania: 50,
+        valorFelipe: Number((total / 2).toFixed(2)),
+        valorGenivania: Number((total / 2).toFixed(2)),
       },
     };
 

@@ -25,6 +25,7 @@ import {
   addFuelLogToCloud,
   updateFuelLogInCloud,
   deleteFuelLogFromCloud,
+  saveScannedReceiptToCloud,
 } from './services/supabaseService';
 
 export default function App() {
@@ -168,6 +169,11 @@ export default function App() {
     };
 
     setTransactions((prev) => [newTx, ...prev]);
+
+    // Salvar na nuvem Supabase em segundo plano
+    saveScannedReceiptToCloud(receipt, newTx).then((ok) => {
+      if (ok) console.log('[App] Comprovante e transação salvos no Supabase com sucesso.');
+    });
 
     // 3. Update spreadsheet reality row for active month
     setSpreadsheets((prev) => {
