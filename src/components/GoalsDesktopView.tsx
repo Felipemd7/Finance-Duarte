@@ -62,6 +62,7 @@ export interface CarPlanningItem {
   badge: string;
   subtext: string;
   spent?: number;
+  data?: string;
   type: 'quota' | 'annual' | 'ceiling' | 'monthly';
 }
 
@@ -135,41 +136,7 @@ const DEFAULT_CATEGORIES: BudgetCategoryItem[] = [
   },
 ];
 
-const DEFAULT_CAR_COSTS: CarPlanningItem[] = [
-  {
-    id: 'car-ipva',
-    title: 'IPVA 2026 (PI)',
-    amount: 3200,
-    badge: '3 de 5 Quitadas',
-    subtext: 'Parcelas de R$ 640,00/mês',
-    type: 'quota',
-  },
-  {
-    id: 'car-seguro',
-    title: 'Seguro Cobertura Total',
-    amount: 2800,
-    badge: 'Renovação Nov/26',
-    subtext: 'Provisionado R$ 233,33/mês',
-    type: 'annual',
-  },
-  {
-    id: 'car-manutencao',
-    title: 'Manutenção Preventiva',
-    amount: 3000,
-    spent: 650,
-    badge: 'Teto R$ 3.000',
-    subtext: 'Revisão 40.000km em dia',
-    type: 'ceiling',
-  },
-  {
-    id: 'car-telemetria',
-    title: 'Telemetria & Rastreador',
-    amount: 99,
-    badge: 'Assinatura Débito',
-    subtext: 'Total Anual R$ 1.188,00',
-    type: 'monthly',
-  },
-];
+const DEFAULT_CAR_COSTS: CarPlanningItem[] = [];
 
 export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   isReclassified,
@@ -350,6 +317,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const [editingCategory, setEditingCategory] = useState<BudgetCategoryItem | null>(null);
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
   const [editingCarCost, setEditingCarCost] = useState<CarPlanningItem | null>(null);
+  const [isNewCarCostModalOpen, setIsNewCarCostModalOpen] = useState(false);
 
   // Forms State for Category
   const [catName, setCatName] = useState('');
@@ -363,6 +331,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const [carTitle, setCarTitle] = useState('');
   const [carAmount, setCarAmount] = useState('');
   const [carSpent, setCarSpent] = useState('');
+  const [carDate, setCarDate] = useState('');
   const [carBadge, setCarBadge] = useState('');
   const [carSubtext, setCarSubtext] = useState('');
 
@@ -461,6 +430,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     setCarTitle(item.title);
     setCarAmount(item.amount.toString());
     setCarSpent(item.spent ? item.spent.toString() : '');
+    setCarDate(item.data || '');
     setCarBadge(item.badge);
     setCarSubtext(item.subtext);
   };
@@ -481,6 +451,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
               title: carTitle.trim(),
               amount: amt,
               spent: sp,
+              data: carDate ? carDate.trim() : undefined,
               badge: carBadge.trim(),
               subtext: carSubtext.trim(),
             }
@@ -490,6 +461,51 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
     setEditingCarCost(null);
     onShowToast(`Item do veículo "${carTitle}" atualizado!`);
+  };
+
+  // Delete Car Cost
+  const handleDeleteCarCost = (id: string) => {
+    const item = carCosts.find((c) => c.id === id);
+    if (confirm(`Deseja remover o custo planejado "${item?.title || 'este custo'}"?`)) {
+      setCarCosts((prev) => prev.filter((c) => c.id !== id));
+      setEditingCarCost(null);
+      onShowToast('Custo removido do planejamento.');
+    }
+  };
+
+  // Open Add Car Cost Modal
+  const handleOpenNewCarCost = () => {
+    setCarTitle('');
+    setCarAmount('');
+    setCarSpent('');
+    setCarDate(new Date().toISOString().split('T')[0]);
+    setCarBadge('Planejado');
+    setCarSubtext('Despesa do Veículo');
+    setIsNewCarCostModalOpen(true);
+  };
+
+  // Save New Car Cost
+  const handleSaveNewCarCost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!carTitle.trim()) return;
+
+    const amt = parseFloat(carAmount.replace(',', '.')) || 0;
+    const sp = carSpent ? parseFloat(carSpent.replace(',', '.')) : undefined;
+
+    const newCarItem: CarPlanningItem = {
+      id: 'car-' + Date.now(),
+      title: carTitle.trim(),
+      amount: amt,
+      spent: sp,
+      data: carDate ? carDate.trim() : undefined,
+      badge: carBadge.trim() || 'Planejado',
+      subtext: carSubtext.trim() || 'Despesa do Veículo',
+      type: 'annual',
+    };
+
+    setCarCosts((prev) => [...prev, newCarItem]);
+    setIsNewCarCostModalOpen(false);
+    onShowToast(`Custo "${newCarItem.title}" adicionado ao planejamento do veículo!`);
   };
 
   // Helper to render icon for category
@@ -755,61 +771,107 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           </div>
         </div>
 
-        {/* 1. Planejamento & Custos Fixos (4 Subcards de Provisão Anual) */}
+        {/* 1. Planejamento & Custos Fixos (Subcards de Provisão / Gastos com o Veículo) */}
         <div className="bg-white rounded-3xl p-6 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)]">
-          <div className="flex items-center justify-between pb-4 border-b border-[#f1f5f9] mb-4 flex-wrap gap-2">
+          <div className="flex items-center justify-between pb-4 border-b border-[#f1f5f9] mb-4 flex-wrap gap-3">
             <div>
-              <h3 className="font-display font-bold text-sm text-[#0b1c30]">
-                Planejamento & Custos Fixos Anuais
-              </h3>
-              <p className="text-xs text-[#565e74]">
-                Provisões do Orçamento Familiar Conjunto • Total orçado: R$ 9.188,00/ano
-              </p>
-            </div>
-            <span className="text-xs font-bold text-[#006194] bg-[#eff4ff] px-3 py-1 rounded-full border border-[#dce9ff]">
-              Custo fixo provisionado: ~R$ 0,53 / km
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {carCosts.map((item) => (
-              <div
-                key={item.id}
-                className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#e5eeff] relative group hover:border-[#006194]/30 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#0b1c30] truncate pr-2">
-                    {item.title}
-                  </span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#006948] text-[10px] font-bold">
-                      {item.badge}
-                    </span>
-                    <button
-                      onClick={() => handleOpenEditCarCost(item)}
-                      className="p-1 rounded text-[#565e74] hover:text-[#006194] hover:bg-white cursor-pointer"
-                      title="Editar custo"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                <div className="font-display font-extrabold text-lg text-[#0b1c30] font-mono mt-1.5">
-                  {item.spent ? (
-                    <>
-                      {formatBRL(item.spent)}{' '}
-                      <span className="text-xs font-normal text-[#565e74]">gastos</span>
-                    </>
-                  ) : (
-                    formatBRL(item.amount)
-                  )}
-                </div>
-                <span className="text-[10px] text-[#565e74] block mt-0.5 truncate">
-                  {item.subtext}
+              <div className="flex items-center gap-2">
+                <h3 className="font-display font-bold text-sm text-[#0b1c30]">
+                  Planejamento & Custos do Veículo
+                </h3>
+                <span className="text-[11px] font-semibold text-[#006948] bg-[#dcfce7] px-2 py-0.5 rounded-full">
+                  Manual & Personalizável
                 </span>
               </div>
-            ))}
+              <p className="text-xs text-[#565e74] mt-0.5">
+                {carCosts.length > 0
+                  ? `Total registrado: ${formatBRL(carCosts.reduce((acc, c) => acc + c.amount, 0))}`
+                  : 'Nenhum custo cadastrado ainda. Adicione seus gastos reais como peças, oficina, IPVA ou troca de pneus.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenNewCarCost}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006948] text-white text-xs font-bold hover:bg-[#005a3c] shadow-xs cursor-pointer transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Adicionar Custo</span>
+              </button>
+            </div>
           </div>
+
+          {carCosts.length === 0 ? (
+            <div className="py-8 px-4 text-center rounded-2xl bg-[#f8faff] border border-dashed border-[#dce9ff] flex flex-col items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-[#eff4ff] text-[#006194] flex items-center justify-center mb-2">
+                <Car className="w-5 h-5" />
+              </div>
+              <h4 className="text-xs font-bold text-[#0b1c30]">Nenhum custo fixo ou manutenção registrada</h4>
+              <p className="text-[11px] text-[#565e74] max-w-md mt-1 mb-3">
+                Registre manualmente seus gastos reais como peças, manutenção na oficina, IPVA, troca de pneus, seguro ou taxas.
+              </p>
+              <button
+                onClick={handleOpenNewCarCost}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#006194] text-white text-xs font-semibold hover:bg-[#004f7a] cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Registrar Primeiro Custo</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {carCosts.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#e5eeff] relative group hover:border-[#006194]/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#0b1c30] truncate pr-2" title={item.title}>
+                      {item.title}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#006948] text-[10px] font-bold">
+                        {item.badge}
+                      </span>
+                      <button
+                        onClick={() => handleOpenEditCarCost(item)}
+                        className="p-1 rounded text-[#565e74] hover:text-[#006194] hover:bg-white cursor-pointer"
+                        title="Editar custo"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCarCost(item.id)}
+                        className="p-1 rounded text-[#565e74] hover:text-[#ba1a1a] hover:bg-white cursor-pointer"
+                        title="Excluir custo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="font-display font-extrabold text-lg text-[#0b1c30] font-mono mt-1.5">
+                    {item.spent ? (
+                      <>
+                        {formatBRL(item.spent)}{' '}
+                        <span className="text-xs font-normal text-[#565e74]">gastos</span>
+                      </>
+                    ) : (
+                      formatBRL(item.amount)
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-[10px] text-[#565e74]">
+                    <span className="truncate pr-1" title={item.subtext}>
+                      {item.subtext}
+                    </span>
+                    {item.data && (
+                      <span className="shrink-0 font-medium text-[#006194] bg-[#eff4ff] px-1.5 py-0.5 rounded text-[9px]">
+                        {item.data.split('-').reverse().join('/')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 2. Custo Real por KM, Abastecimentos, Odômetro & Consumo (Diário, Semanal e Mensal) */}
@@ -1620,35 +1682,191 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Status / Badge
+                    Data da Compra / Pagamento
                   </label>
                   <input
-                    type="text"
-                    placeholder="Ex: 3 de 5 Quitadas"
-                    value={carBadge}
-                    onChange={(e) => setCarBadge(e.target.value)}
+                    type="date"
+                    value={carDate}
+                    onChange={(e) => setCarDate(e.target.value)}
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
                   />
                 </div>
 
                 <div>
                   <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Subtexto Informativo
+                    Status / Badge
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex: Parcelas de R$ 640/mês"
-                    value={carSubtext}
-                    onChange={(e) => setCarSubtext(e.target.value)}
+                    placeholder="Ex: Quitado, Orçado, 3 de 5"
+                    value={carBadge}
+                    onChange={(e) => setCarBadge(e.target.value)}
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
                   />
                 </div>
               </div>
 
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Subtexto / Observação
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Parcelas de R$ 640/mês"
+                  value={carSubtext}
+                  onChange={(e) => setCarSubtext(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-[#f1f5f9] mt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCarCost(editingCarCost.id)}
+                  className="flex items-center gap-1 text-xs font-semibold text-[#ba1a1a] hover:bg-[#ffebee] px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Excluir</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCarCost(null)}
+                    className="px-3 py-2 rounded-xl text-xs font-semibold text-[#565e74] hover:bg-[#f1f5f9]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#006948] text-white hover:bg-[#005a3c] shadow-xs cursor-pointer"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ADD NEW CAR COST ITEM                                              */}
+      {/* ========================================================================= */}
+      {isNewCarCostModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e5eeff] animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#eff4ff] text-[#006194] flex items-center justify-center">
+                  <Car className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base text-[#0b1c30]">
+                    Novo Custo do Veículo
+                  </h3>
+                  <span className="text-xs text-[#565e74]">
+                    Renault Duster 2016 1.6
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsNewCarCostModalOpen(false)}
+                className="p-1 rounded-full text-[#565e74] hover:bg-[#eff4ff]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewCarCost} className="flex flex-col gap-3.5 pt-4">
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Item de Custo / Descrição
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Troca de Pneus, IPVA 2026, Revisão de Freios, Bateria"
+                  value={carTitle}
+                  onChange={(e) => setCarTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Valor Total / Teto (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={carAmount}
+                    onChange={(e) => setCarAmount(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Valor Já Gasto (Opcional)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={carSpent}
+                    onChange={(e) => setCarSpent(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Data da Compra / Pagamento
+                  </label>
+                  <input
+                    type="date"
+                    value={carDate}
+                    onChange={(e) => setCarDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Status / Etiqueta
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Orçado, Quitado, 1 de 4"
+                    value={carBadge}
+                    onChange={(e) => setCarBadge(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Subtexto / Observação
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Par de pneus dianteiros"
+                  value={carSubtext}
+                  onChange={(e) => setCarSubtext(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#f1f5f9] mt-2">
                 <button
                   type="button"
-                  onClick={() => setEditingCarCost(null)}
+                  onClick={() => setIsNewCarCostModalOpen(false)}
                   className="px-3 py-2 rounded-xl text-xs font-semibold text-[#565e74] hover:bg-[#f1f5f9]"
                 >
                   Cancelar
@@ -1657,7 +1875,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-[#006948] text-white hover:bg-[#005a3c] shadow-xs cursor-pointer"
                 >
-                  Salvar Alterações
+                  Cadastrar Custo
                 </button>
               </div>
             </form>
