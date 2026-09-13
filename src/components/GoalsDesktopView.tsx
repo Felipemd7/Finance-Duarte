@@ -751,7 +751,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           </div>
 
           <div className="px-3 py-1.5 rounded-full bg-[#f1f5f9] text-[#565e74] text-xs font-semibold border border-[#e2e8f0]">
-            Veículo: Compass Limited 1.3 Turbo • Placa: DUA-2026
+            Veículo: Renault Duster 2016 1.6 • Placa: DUA-2026
           </div>
         </div>
 
@@ -819,7 +819,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           onUpdateFuelLog={handleUpdateFuelLog}
           onDeleteFuelLog={handleDeleteFuelLog}
           onShowToast={onShowToast}
-          veiculoInfo="Compass Limited 1.3 Turbo • Placa DUA-2026"
+          veiculoInfo="Renault Duster 2016 1.6 • Placa DUA-2026"
           custosFixosRateadosKm={0.53}
         />
       </div>
@@ -1114,7 +1114,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
               <div className="space-y-1.5 text-[10px] font-mono bg-[#f8faff] p-2.5 rounded-xl border border-[#e5eeff] text-[#0b1c30]">
                 <div className="text-[#a855f7]">"E aí Siri, gastei 45 reais em café"</div>
-                <div className="text-[#565e74]">"E aí Siri, abasteci 150 no Compass"</div>
+                <div className="text-[#565e74]">"E aí Siri, abasteci 150 na Duster"</div>
               </div>
             </div>
 

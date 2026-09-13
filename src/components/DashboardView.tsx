@@ -702,7 +702,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-xs font-bold text-[#006948]">✓ Monitorado</span>
               </div>
               <p className="text-[11px] text-[#565e74] truncate mb-3">
-                Manutenção Jeep Compass, Saúde e imprevistos...
+                Manutenção Renault Duster, Saúde e imprevistos...
               </p>
               <div className="flex items-baseline justify-between text-xs mb-1">
                 <span className="text-[#565e74]">Realizado:</span>
@@ -833,7 +833,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
                     metrics.gastoCarro > metrics.goalCarro ? 'bg-[#ffdad6] text-[#ba1a1a]' : 'bg-[#eff4ff] text-[#006194]'
                   }`}>
-                    COMPASS
+                    DUSTER
                   </span>
                 </div>
 

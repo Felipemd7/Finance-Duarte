@@ -53,7 +53,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
   onUpdateFuelLog,
   onDeleteFuelLog,
   onShowToast,
-  veiculoInfo = 'Compass Limited 1.3 Turbo • Placa DUA-2026',
+  veiculoInfo = 'Renault Duster 2016 1.6 • Placa DUA-2026',
   custosFixosRateadosKm = 0.53,
 }) => {
   // Active period filter for analytics: 'diario' | 'semanal' | 'mensal'
@@ -93,7 +93,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     );
 
     return list.map((item, index) => {
-      if (index === 0) {
+      if (index === 0 || !item.kmAtual || item.kmAtual === 0) {
         return {
           ...item,
           kmRodados: 0,
@@ -103,7 +103,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
       }
 
       const prev = list[index - 1];
-      const deltaKm = Math.max(0, item.kmAtual - prev.kmAtual);
+      const deltaKm = prev.kmAtual > 0 && item.kmAtual > prev.kmAtual ? item.kmAtual - prev.kmAtual : 0;
       const litros = item.litros > 0 ? item.litros : item.valorTotal / (item.precoLitro || 5.8);
       const kmPorLitro = litros > 0 && deltaKm > 0 ? Number((deltaKm / litros).toFixed(2)) : 0;
       const custoKm = deltaKm > 0 ? Number((item.valorTotal / deltaKm).toFixed(2)) : 0;
@@ -126,6 +126,11 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
   // Reverse list for chronological descending view in the table
   const logsDescending = useMemo(() => [...sortedLogs].reverse(), [sortedLogs]);
+
+  // Verifica se há odômetro registrado nos abastecimentos
+  const hasOdometer = useMemo(() => {
+    return sortedLogs.some((item) => (item.kmAtual || 0) > 0);
+  }, [sortedLogs]);
 
   // 2. Aggregate Key Metrics
   const metrics = useMemo(() => {
@@ -152,7 +157,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     const first = sortedLogs[0];
     const last = sortedLogs[sortedLogs.length - 1];
 
-    const totalKmRodados = Math.max(0, last.kmAtual - first.kmAtual);
+    const totalKmRodados = hasOdometer && last.kmAtual > first.kmAtual ? last.kmAtual - first.kmAtual : 0;
     const totalGasto = sortedLogs.reduce((sum, item) => sum + item.valorTotal, 0);
     const totalLitros = sortedLogs.reduce((sum, item) => sum + item.litros, 0);
 
@@ -163,26 +168,25 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
     // Cost per km of fuel
     const custoCombustivelKm =
-      totalKmRodados > 0 ? Number((totalGasto / totalKmRodados).toFixed(2)) : 0.65;
+      totalKmRodados > 0 ? Number((totalGasto / totalKmRodados).toFixed(2)) : 0;
 
     // Real Total Cost per KM = Fuel + Fixed costs share
-    const custoRealTotalKm = Number((custoCombustivelKm + custosFixosRateadosKm).toFixed(2));
+    const custoRealTotalKm = totalKmRodados > 0 ? Number((custoCombustivelKm + custosFixosRateadosKm).toFixed(2)) : 0;
 
     // Average km/L
-    // Sum only cycles where km was measured (index > 0)
     const measuredLogs = sortedLogs.slice(1);
     const measuredLitros = measuredLogs.reduce((sum, item) => sum + item.litros, 0);
     const kmPorLitroMedio =
       measuredLitros > 0 && totalKmRodados > 0
         ? Number((totalKmRodados / measuredLitros).toFixed(2))
-        : 11.3;
+        : 0;
 
     // Average price per litre
     const precoLitroMedio =
-      totalLitros > 0 ? Number((totalGasto / totalLitros).toFixed(2)) : 5.84;
+      totalLitros > 0 ? Number((totalGasto / totalLitros).toFixed(2)) : 5.86;
 
     // Daily consumption
-    const consumoDiarioKm = Number((totalKmRodados / totalDays).toFixed(1));
+    const consumoDiarioKm = totalKmRodados > 0 ? Number((totalKmRodados / totalDays).toFixed(1)) : 0;
     const consumoDiarioValor = Number((totalGasto / totalDays).toFixed(2));
 
     // Weekly consumption (7 days)
@@ -215,25 +219,25 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
   // 3. Chart Data Generation based on selected periodView
   const chartData = useMemo(() => {
-    if (sortedLogs.length <= 1) return [];
+    if (sortedLogs.length === 0) return [];
 
     if (periodView === 'diario') {
-      // Show each refill interval with its daily average
-      return sortedLogs.slice(1).map((log) => ({
-        label: `${log.data.slice(5)} (${(log as any).diffDays}d)`,
-        kmDia: (log as any).kmPorDia || 0,
-        gastoDia: (log as any).gastoPorDia || 0,
+      return sortedLogs.map((log) => ({
+        label: log.data.slice(5),
+        kmDia: (log as any).kmRodados || 0,
+        gastoDia: log.valorTotal,
+        litros: log.litros,
         precoLitro: log.precoLitro,
         posto: log.posto,
       }));
     }
 
     if (periodView === 'semanal') {
-      // Group by weeks or represent weekly rate between refills
-      return sortedLogs.slice(1).map((log) => ({
-        label: `Sem ${log.data.slice(5)}`,
-        kmSemana: Number((((log as any).kmPorDia || 0) * 7).toFixed(0)),
-        gastoSemana: Number((((log as any).gastoPorDia || 0) * 7).toFixed(2)),
+      return sortedLogs.map((log) => ({
+        label: log.data.slice(5),
+        kmSemana: (log as any).kmRodados || 0,
+        gastoSemana: log.valorTotal,
+        litros: log.litros,
         precoLitro: log.precoLitro,
         posto: log.posto,
       }));
@@ -280,16 +284,16 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
       }
       monthlyGroups[monthKey].gasto += log.valorTotal;
       monthlyGroups[monthKey].litros += log.litros;
-      monthlyGroups[monthKey].km += log.kmRodados || 0;
+      monthlyGroups[monthKey].km += (log as any).kmRodados || 0;
       monthlyGroups[monthKey].count += 1;
     });
 
-    return Object.values(monthlyGroups).map((item) => ({
-      label: item.month,
-      gastoMes: Number(item.gasto.toFixed(2)),
-      kmMes: item.km,
-      custoKm: item.km > 0 ? Number((item.gasto / item.km).toFixed(2)) : 0.52,
-      precoLitro: item.litros > 0 ? Number((item.gasto / item.litros).toFixed(2)) : 5.8,
+    return Object.values(monthlyGroups).map((g) => ({
+      label: g.month,
+      gastoMes: Number(g.gasto.toFixed(2)),
+      litrosMes: Number(g.litros.toFixed(1)),
+      kmMes: g.km,
+      count: g.count,
     }));
   }, [sortedLogs, periodView]);
 
@@ -534,6 +538,28 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
           </div>
         </div>
 
+        {/* Banner Informativo quando Odômetro não foi anotado */}
+        {!hasOdometer && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-[#eff4ff] border border-[#dce9ff] flex items-center justify-between flex-wrap gap-2 text-xs">
+            <div className="flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-white text-[#006194] shadow-2xs border border-[#dce9ff]">
+                <Car className="w-4 h-4" />
+              </span>
+              <div>
+                <div className="font-bold text-[#0b1c30] flex items-center gap-2">
+                  <span>Renault Duster 2016 1.6</span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#f1f5f9] text-[#565e74] text-[10px] font-semibold border border-[#e2e8f0]">
+                    Odômetro nos abastecimentos não registrado
+                  </span>
+                </div>
+                <p className="text-[#565e74] text-[11px] mt-0.5">
+                  As métricas de KM/L e Custo por KM estão desativadas para preservar a precisão dos dados. Ao registrar futuros abastecimentos informando o Odômetro (KM), o cálculo automático de consumo será ativado.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* --------------------------------------------------------------------- */}
         {/* KPI CARDS ROW: Custo Real / KM, Consumo Diário, Semanal, Mensal      */}
         {/* --------------------------------------------------------------------- */}
@@ -548,89 +574,89 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
             </div>
             <div className="my-1.5">
               <div className="font-display font-extrabold text-2xl text-[#005a3c] font-mono leading-none">
-                {formatBRL(metrics.custoRealTotalKm)}
+                {hasOdometer && metrics.custoRealTotalKm > 0 ? formatBRL(metrics.custoRealTotalKm) : '—'}
               </div>
               <span className="text-[10px] font-semibold text-[#565e74] block mt-1">
-                {formatBRL(metrics.custoCombustivelKm)} comb. + {formatBRL(custosFixosRateadosKm)} fixo
+                {hasOdometer ? `${formatBRL(metrics.custoCombustivelKm)} comb. + ${formatBRL(custosFixosRateadosKm)} fixo` : 'Aguardando registro de Odômetro'}
               </span>
             </div>
             <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px]">
               <span className="text-[#006948] font-bold">
-                {metrics.kmPorLitroMedio} km/L médio
+                {hasOdometer && metrics.kmPorLitroMedio > 0 ? `${metrics.kmPorLitroMedio} km/L médio` : 'Métrica pausada'}
               </span>
               <span className="text-[#565e74] font-mono">
-                {metrics.totalKmRodados.toLocaleString('pt-BR')} km total
+                {hasOdometer ? `${metrics.totalKmRodados.toLocaleString('pt-BR')} km total` : '0 km anotados'}
               </span>
             </div>
           </div>
 
-          {/* Card 2: Consumo Diário */}
+          {/* Card 2: Total Gasto */}
           <div className="bg-[#f8faff] rounded-2xl p-4 border border-[#e5eeff] flex flex-col justify-between hover:border-[#006194]/30 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#565e74]">Consumo Diário</span>
+              <span className="text-xs font-bold text-[#565e74]">Total em Combustível</span>
               <span className="p-1.5 rounded-xl bg-[#eff4ff] text-[#006194]">
-                <Calendar className="w-3.5 h-3.5" />
+                <DollarSign className="w-3.5 h-3.5" />
               </span>
             </div>
             <div className="my-1.5">
               <div className="font-display font-extrabold text-2xl text-[#0b1c30] font-mono leading-none">
-                {metrics.consumoDiarioKm}{' '}
-                <span className="text-xs font-normal text-[#565e74]">km/dia</span>
+                {formatBRL(metrics.totalGasto)}
               </div>
               <span className="text-[10px] font-semibold text-[#006194] block mt-1 font-mono">
-                {formatBRL(metrics.consumoDiarioValor)} / dia gasto
+                {sortedLogs.length} abastecimentos registrados
               </span>
             </div>
             <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px] text-[#565e74]">
-              <span>Média de rotina</span>
-              <span className="text-[#006194] font-bold">Odômetro real</span>
+              <span>Média por parada</span>
+              <span className="text-[#006194] font-bold font-mono">
+                {formatBRL(sortedLogs.length > 0 ? metrics.totalGasto / sortedLogs.length : 0)}
+              </span>
             </div>
           </div>
 
-          {/* Card 3: Consumo Semanal */}
+          {/* Card 3: Volume Total Abastecido */}
           <div className="bg-[#f8faff] rounded-2xl p-4 border border-[#e5eeff] flex flex-col justify-between hover:border-[#006194]/30 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#565e74]">Consumo Semanal</span>
+              <span className="text-xs font-bold text-[#565e74]">Volume Abastecido</span>
               <span className="p-1.5 rounded-xl bg-[#eff4ff] text-[#006194]">
-                <TrendingUp className="w-3.5 h-3.5" />
-              </span>
-            </div>
-            <div className="my-1.5">
-              <div className="font-display font-extrabold text-2xl text-[#0b1c30] font-mono leading-none">
-                {metrics.consumoSemanalKm}{' '}
-                <span className="text-xs font-normal text-[#565e74]">km/sem</span>
-              </div>
-              <span className="text-[10px] font-semibold text-[#006194] block mt-1 font-mono">
-                {formatBRL(metrics.consumoSemanalValor)} / semana
-              </span>
-            </div>
-            <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px] text-[#565e74]">
-              <span>~{(metrics.consumoSemanalKm / (metrics.kmPorLitroMedio || 11)).toFixed(1)} L/sem</span>
-              <span className="text-[#006948] font-bold">1 tanque/10 dias</span>
-            </div>
-          </div>
-
-          {/* Card 4: Consumo Mensal & Preço Médio do Litro */}
-          <div className="bg-[#f8faff] rounded-2xl p-4 border border-[#e5eeff] flex flex-col justify-between hover:border-[#006948]/30 transition-colors">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#565e74]">Consumo Mensal</span>
-              <span className="p-1.5 rounded-xl bg-[#ecfdf5] text-[#006948]">
                 <Fuel className="w-3.5 h-3.5" />
               </span>
             </div>
             <div className="my-1.5">
               <div className="font-display font-extrabold text-2xl text-[#0b1c30] font-mono leading-none">
-                {metrics.consumoMensalKm}{' '}
-                <span className="text-xs font-normal text-[#565e74]">km/mês</span>
+                {metrics.totalLitros.toFixed(1)}{' '}
+                <span className="text-xs font-normal text-[#565e74]">Litros</span>
               </div>
-              <span className="text-[10px] font-semibold text-[#006948] block mt-1 font-mono">
-                {formatBRL(metrics.consumoMensalValor)} / mês • Litro: {formatBRL(metrics.precoLitroMedio)}
+              <span className="text-[10px] font-semibold text-[#006194] block mt-1 font-mono">
+                Média de {(sortedLogs.length > 0 ? metrics.totalLitros / sortedLogs.length : 0).toFixed(1)} L / abastecimento
               </span>
             </div>
             <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px] text-[#565e74]">
-              <span>Teto: R$ 800,00</span>
+              <span>Renault Duster 2016</span>
+              <span className="text-[#006948] font-bold">1.6 16V Flex</span>
+            </div>
+          </div>
+
+          {/* Card 4: Preço Médio do Litro */}
+          <div className="bg-[#f8faff] rounded-2xl p-4 border border-[#e5eeff] flex flex-col justify-between hover:border-[#006948]/30 transition-colors">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#565e74]">Preço Médio / Litro</span>
+              <span className="p-1.5 rounded-xl bg-[#ecfdf5] text-[#006948]">
+                <TrendingUp className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <div className="my-1.5">
+              <div className="font-display font-extrabold text-2xl text-[#0b1c30] font-mono leading-none">
+                {formatBRL(metrics.precoLitroMedio)}
+              </div>
+              <span className="text-[10px] font-semibold text-[#006948] block mt-1 font-mono">
+                Postos de Teresina - PI
+              </span>
+            </div>
+            <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px] text-[#565e74]">
+              <span>Teto Mensal: R$ 800,00</span>
               <span className="px-1.5 py-0.2 rounded-full bg-[#dcfce7] text-[#006948] font-bold text-[9px]">
-                Dentro do teto
+                Monitorado
               </span>
             </div>
           </div>
@@ -700,16 +726,20 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#006194]" />
                   <span>
-                    {periodView === 'diario'
-                      ? 'KM/dia rodados'
-                      : periodView === 'semanal'
-                      ? 'KM/semana rodados'
-                      : 'KM no mês'}
+                    {hasOdometer
+                      ? periodView === 'diario'
+                        ? 'KM/dia rodados'
+                        : periodView === 'semanal'
+                        ? 'KM/semana rodados'
+                        : 'KM no mês'
+                      : periodView === 'mensal'
+                      ? 'Litros no mês'
+                      : 'Litros abastecidos'}
                   </span>
                 </span>
               </div>
               <span className="font-mono text-[11px] font-semibold text-[#0b1c30]">
-                Último abastecimento: {metrics.ultimoPosto || 'Posto Ipiranga'} • {formatBRL(metrics.ultimoPrecoLitro)}/L
+                Último abastecimento: {metrics.ultimoPosto || 'Posto Cacique'} • {formatBRL(metrics.ultimoPrecoLitro)}/L
               </span>
             </div>
 
@@ -739,7 +769,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     fontSize={10}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(val) => `${val}km`}
+                    tickFormatter={(val) => (hasOdometer ? `${val}km` : `${val}L`)}
                   />
                   <Tooltip
                     formatter={(val: any, name: string) => {
@@ -748,6 +778,9 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                       }
                       if (name === 'kmMes' || name === 'kmSemana' || name === 'kmDia') {
                         return [`${val} km`, 'Quilômetros Rodados'];
+                      }
+                      if (name === 'litrosMes' || name === 'litros') {
+                        return [`${Number(val).toFixed(1)} L`, 'Volume Abastecido'];
                       }
                       if (name === 'precoLitro') {
                         return [formatBRL(Number(val)), 'Preço do Litro'];
@@ -779,11 +812,15 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     yAxisId="right"
                     type="monotone"
                     dataKey={
-                      periodView === 'diario'
-                        ? 'kmDia'
-                        : periodView === 'semanal'
-                        ? 'kmSemana'
-                        : 'kmMes'
+                      hasOdometer
+                        ? periodView === 'diario'
+                          ? 'kmDia'
+                          : periodView === 'semanal'
+                          ? 'kmSemana'
+                          : 'kmMes'
+                        : periodView === 'mensal'
+                        ? 'litrosMes'
+                        : 'litros'
                     }
                     stroke="#006194"
                     strokeWidth={2.5}
@@ -829,14 +866,18 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     </td>
 
                     <td className="py-3 px-2 text-right font-mono font-semibold text-[#0b1c30]">
-                      {log.kmAtual.toLocaleString('pt-BR')} km
+                      {log.kmAtual && log.kmAtual > 0 ? (
+                        `${log.kmAtual.toLocaleString('pt-BR')} km`
+                      ) : (
+                        <span className="text-[#94a3b8] text-[10px]">—</span>
+                      )}
                     </td>
 
                     <td className="py-3 px-2 text-right font-mono text-[#006194] font-bold">
                       {log.kmRodados && log.kmRodados > 0 ? (
                         `+${log.kmRodados} km`
                       ) : (
-                        <span className="text-[#94a3b8] text-[10px]">Calibragem</span>
+                        <span className="text-[#94a3b8] text-[10px]">—</span>
                       )}
                     </td>
 
@@ -851,7 +892,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                       {log.consumoKmPorLitro && log.consumoKmPorLitro > 0 ? (
                         `${log.consumoKmPorLitro} km/L`
                       ) : (
-                        <span className="text-[#94a3b8] text-[10px]">-</span>
+                        <span className="text-[#94a3b8] text-[10px]">—</span>
                       )}
                     </td>
 
@@ -859,7 +900,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                       {log.custoPorKm && log.custoPorKm > 0 ? (
                         `${formatBRL(log.custoPorKm)}/km`
                       ) : (
-                        <span className="text-[#94a3b8] text-[10px]">-</span>
+                        <span className="text-[#94a3b8] text-[10px]">—</span>
                       )}
                     </td>
 

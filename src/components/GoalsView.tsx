@@ -701,7 +701,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
                     <h3 className="font-display font-bold text-sm text-[#0b1c30]">
                       Gestão Anual do Carro
                     </h3>
-                    <span className="text-[11px] text-[#565e74]">Compass Limited • DUA-2026</span>
+                    <span className="text-[11px] text-[#565e74]">Renault Duster 2016 1.6 • DUA-2026</span>
                   </div>
                 </div>
                 <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-[10px] font-bold border border-[#a7f3d0]">
@@ -712,7 +712,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               <div className="grid grid-cols-1 gap-2.5 mt-3.5">
                 <div className="bg-[#eff4ff] border border-[#dce9ff] rounded-2xl p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#0b1c30]">IPVA 2026 (SP)</span>
+                    <span className="text-xs font-bold text-[#0b1c30]">IPVA 2026 (PI)</span>
                     <span className="px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] font-bold text-[10px]">
                       3 de 5 Quitadas
                     </span>
