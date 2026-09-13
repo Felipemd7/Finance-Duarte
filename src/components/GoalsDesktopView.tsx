@@ -238,7 +238,10 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
         return sub.includes('lazer') || sub.includes('restaurante') || sub.includes('jantar');
       }
       if (nameLower.includes('combustivel') || nameLower.includes('combustível') || nameLower.includes('posto')) {
-        return sub.includes('combust');
+        return (sub.includes('combust') || sub.includes('posto')) && !sub.includes('uber');
+      }
+      if (nameLower.includes('uber') || nameLower.includes('transporte app') || nameLower.includes('mobilidade')) {
+        return sub.includes('uber');
       }
       if (nameLower.includes('farmacia') || nameLower.includes('farmácia') || nameLower.includes('cuidados') || nameLower.includes('saude') || nameLower.includes('saúde')) {
         return sub.includes('farm') || sub.includes('saude') || sub.includes('saúde');
@@ -247,7 +250,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
         return sub.includes('aluguel') || sub.includes('condominio') || sub.includes('condomínio');
       }
       if (nameLower.includes('carro') || nameLower.includes('veiculo') || nameLower.includes('veículo')) {
-        return sub.includes('carro') || sub.includes('manuten') || sub.includes('seguro') || sub.includes('rastreador') || sub.includes('combust');
+        return (sub.includes('carro') || sub.includes('manuten') || sub.includes('seguro') || sub.includes('rastreador') || sub.includes('combust')) && !sub.includes('uber');
       }
       return sub.includes(cat.id.toLowerCase()) || sub.includes(cat.name.toLowerCase());
     });
