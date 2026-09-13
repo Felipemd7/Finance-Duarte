@@ -187,12 +187,13 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
   // Cálculo 100% automático do gasto real da categoria no banco Supabase
   const calculateRealSpent = useCallback((cat: BudgetCategoryItem): number => {
-    if (!monthTransactions || monthTransactions.length === 0) return cat.spent;
     const nameLower = (cat.name + ' ' + (cat.id || '')).toLowerCase();
 
     if (nameLower.includes('reserva') || nameLower.includes('investimento') || nameLower.includes('poupança') || cat.type === 'saving') {
-      return cat.spent;
+      return 0; // Removido saldo fictício, investimentos refletem apenas aportes reais
     }
+
+    if (!monthTransactions || monthTransactions.length === 0) return 0;
 
     const filtered = monthTransactions.filter((t) => {
       const sub = (t.subcategoria || '').toLowerCase();
@@ -230,9 +231,10 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     if (saved) {
       try {
         const parsed: BudgetCategoryItem[] = JSON.parse(saved);
-        // Higieniza qualquer resquício de texto estático mockado
+        // Higieniza qualquer resquício de saldo ou texto estático mockado
         return parsed.map((c) => ({
           ...c,
+          spent: (c.type === 'saving' || c.id === 'reserva' || (c.name && c.name.toLowerCase().includes('reserva'))) ? 0 : (c.spent || 0),
           alertPercent: c.alertPercent || 85,
           note:
             c.note &&
@@ -335,8 +337,10 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const [carBadge, setCarBadge] = useState('');
   const [carSubtext, setCarSubtext] = useState('');
 
-  // Total Forecast Calculation (100% Automático)
-  const totalSpent = categories.reduce((sum, c) => sum + calculateRealSpent(c), 0);
+  // Total Forecast Calculation (100% Automático baseado nas despesas reais das categorias)
+  const totalSpent = categories
+    .filter((c) => c.type !== 'saving')
+    .reduce((sum, c) => sum + calculateRealSpent(c), 0);
 
   // Open Edit Category Modal
   const handleOpenEditCategory = (cat: BudgetCategoryItem) => {
@@ -632,51 +636,61 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {categories.map((cat) => {
               const realSpent = calculateRealSpent(cat);
-              const pct = Math.round((realSpent / (cat.limit || 1)) * 100);
+              const limit = cat.limit || 1;
+              const consumedPct = Math.round((realSpent / limit) * 100);
               const diff = realSpent - cat.limit;
+              const excessPct = cat.limit > 0 ? Math.round(((realSpent - cat.limit) / cat.limit) * 100) : 0;
               const threshold = cat.alertPercent || 85;
               const isExceeded = cat.type === 'expense' && realSpent > cat.limit;
-              const isWarning = cat.type === 'expense' && !isExceeded && pct >= threshold;
-              const isSavingOver = cat.type === 'saving' && realSpent >= cat.limit;
+              const isWarning = cat.type === 'expense' && !isExceeded && consumedPct >= threshold;
+              const isSavingOver = cat.type === 'saving' && realSpent >= cat.limit && cat.limit > 0;
 
               // Mensagem dinâmica de alerta e status baseada na realidade dos gastos
               const dynamicStatusText = isExceeded
                 ? `Teto excedido em ${formatBRL(diff)}`
                 : isWarning
-                ? `Alerta: ${pct}% atingido (Gatilho ${threshold}%)`
+                ? `Alerta: ${consumedPct}% consumido (Gatilho ${threshold}%)`
                 : cat.type === 'saving'
-                ? (isSavingOver ? `Meta atingida (${formatBRL(realSpent)})` : `Poupança em andamento (${pct}%)`)
+                ? (realSpent > 0 ? (isSavingOver ? `Meta atingida (${formatBRL(realSpent)})` : `Poupança em andamento (${consumedPct}%)`) : `Meta planejada: ${formatBRL(cat.limit)}`)
                 : `${formatBRL(Math.abs(diff))} livres no mês`;
 
               const footerText = cat.note ? `${cat.note} • ${dynamicStatusText}` : dynamicStatusText;
 
               // Styles based on status
               let badgeColor = 'bg-[#dcfce7] text-[#006948]';
-              let badgeText = `${pct}% Seguro`;
+              let badgeText = `${consumedPct}% Seguro`;
               let iconBg = 'bg-[#ecfdf5] text-[#006948]';
               let barColor = 'bg-[#006948]';
               let borderColor = 'border-[#e5eeff]';
 
               if (cat.type === 'saving') {
-                badgeColor = isSavingOver ? 'bg-[#005a3c] text-white' : 'bg-[#dcfce7] text-[#006948]';
-                badgeText = `${pct}% ${isSavingOver ? 'Superado' : 'Em Andamento'}`;
-                iconBg = 'bg-[#dcfce7] text-[#006948]';
-                barColor = 'bg-[#005a3c]';
-                borderColor = isSavingOver ? 'border-[#bbf7d0]' : 'border-[#e5eeff]';
+                if (realSpent === 0) {
+                  badgeColor = 'bg-[#f1f5f9] text-[#64748b]';
+                  badgeText = '0% Planejado';
+                  iconBg = 'bg-[#f1f5f9] text-[#64748b]';
+                  barColor = 'bg-[#cbd5e1]';
+                  borderColor = 'border-[#e2e8f0]';
+                } else {
+                  badgeColor = isSavingOver ? 'bg-[#005a3c] text-white' : 'bg-[#dcfce7] text-[#006948]';
+                  badgeText = isSavingOver ? `+${excessPct}% Superado` : `${consumedPct}% Guardado`;
+                  iconBg = 'bg-[#dcfce7] text-[#006948]';
+                  barColor = 'bg-[#005a3c]';
+                  borderColor = isSavingOver ? 'border-[#bbf7d0]' : 'border-[#e5eeff]';
+                }
               } else if (isExceeded) {
                 badgeColor = 'bg-[#fee2e2] text-[#dc2626]';
-                badgeText = `${pct}% Excedido`;
+                badgeText = `+${excessPct}% Excedido`;
                 iconBg = 'bg-[#fee2e2] text-[#dc2626]';
                 barColor = 'bg-[#dc2626]';
                 borderColor = 'border-[#fee2e2]';
               } else if (isWarning) {
                 badgeColor = 'bg-[#ede9fe] text-[#7c3aed]';
-                badgeText = `${pct}% Atenção`;
+                badgeText = `${consumedPct}% Atenção`;
                 iconBg = 'bg-[#ede9fe] text-[#7c3aed]';
                 barColor = 'bg-[#7c3aed]';
-              } else if (pct >= 80) {
+              } else if (consumedPct >= 80) {
                 badgeColor = 'bg-[#ccfbf1] text-[#0d9488]';
-                badgeText = `${pct}% Equilibrado`;
+                badgeText = `${consumedPct}% Equilibrado`;
                 iconBg = 'bg-[#ccfbf1] text-[#0d9488]';
                 barColor = 'bg-[#0d9488]';
               }
@@ -730,7 +744,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                     <div className="w-full bg-[#e5eeff] h-1.5 rounded-full overflow-hidden mb-2">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
+                        style={{ width: `${Math.min(consumedPct, 100)}%` }}
                       />
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-[#565e74] truncate">
