@@ -128,37 +128,6 @@ function generateInitialData(): DatabaseSchema {
   months.forEach((m, mIdx) => {
     expectativasMensais[m] = { ...baseExpectativas };
 
-    // Monthly incomes for the couple
-    transactions.push({
-      id: `tx-salario-felipe-${m}`,
-      usuario_id: 'usr-felipe',
-      data: `${m}-05`,
-      mes_ano: m,
-      valor: 8500,
-      tipo: 'receita',
-      forma_pagamento: 'pix',
-      status: 'pago',
-      categoria_id: 'cat-invariavel',
-      subcategoria_id: 'sub-aluguel', // dummy income subcat
-      observacoes: 'Salário Felipe Duarte',
-      created_at: `${m}-05T08:00:00Z`,
-    });
-
-    transactions.push({
-      id: `tx-salario-camila-${m}`,
-      usuario_id: 'usr-genivania',
-      data: `${m}-05`,
-      mes_ano: m,
-      valor: 7200,
-      tipo: 'receita',
-      forma_pagamento: 'pix',
-      status: 'pago',
-      categoria_id: 'cat-invariavel',
-      subcategoria_id: 'sub-aluguel',
-      observacoes: 'Salário Genivânia Duarte',
-      created_at: `${m}-05T08:00:00Z`,
-    });
-
     // Invariável monthly expenses
     const fixedList: { sub: string; val: number; day: number; est?: string }[] = [
       { sub: 'sub-aluguel', val: 2400, day: 10 },

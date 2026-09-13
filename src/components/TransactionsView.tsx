@@ -106,9 +106,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     if (s.includes('lazer') || s.includes('restaurante') || s.includes('jantar')) {
       return { icon: Utensils, bg: 'bg-[#fff7ed] text-[#ea580c] border-[#ffedd5]', label: 'Lazer' };
     }
-    if (c.includes('receita')) {
-      return { icon: DollarSign, bg: 'bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]', label: 'Receita' };
-    }
     return { icon: Layers, bg: 'bg-[#f8fafc] text-[#475569] border-[#e2e8f0]', label: subcategoria || 'Geral' };
   };
 
@@ -145,7 +142,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         if (selectedCategoryChip === 'lazer' && !sub.includes('lazer') && !sub.includes('restaurante')) return false;
         if (selectedCategoryChip === 'moradia' && !sub.includes('aluguel') && !sub.includes('condominio') && !sub.includes('condomínio')) return false;
         if (selectedCategoryChip === 'farmacia' && !sub.includes('farm') && !sub.includes('saude') && !sub.includes('saúde')) return false;
-        if (selectedCategoryChip === 'receita' && tx.tipo !== 'receita' && !cat.includes('receita')) return false;
       }
 
       return true;
@@ -167,20 +163,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       lazer: 0,
       moradia: 0,
       farmacia: 0,
-      receita: 0,
     };
     transactions.forEach((tx) => {
       if (filterMonthMode === 'selected' && activeMonthCode && !tx.data.startsWith(activeMonthCode)) return;
       counts.todos++;
       const sub = (tx.subcategoria || '').toLowerCase();
-      const cat = (tx.categoria || '').toLowerCase();
       if (sub.includes('supermercado') || sub.includes('feira')) counts.supermercado++;
       if (sub.includes('combustivel') || sub.includes('combustível')) counts.combustivel++;
       if (sub.includes('carro') || sub.includes('manuten') || sub.includes('seguro') || sub.includes('rastreador')) counts.carro++;
       if (sub.includes('lazer') || sub.includes('restaurante')) counts.lazer++;
       if (sub.includes('aluguel') || sub.includes('condominio') || sub.includes('condomínio')) counts.moradia++;
       if (sub.includes('farm') || sub.includes('saude') || sub.includes('saúde')) counts.farmacia++;
-      if (tx.tipo === 'receita' || cat.includes('receita')) counts.receita++;
     });
     return counts;
   }, [transactions, activeMonthCode, filterMonthMode]);
@@ -371,16 +364,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           >
             🍷 Lazer ({categoryCounts.lazer})
           </button>
-          <button
-            onClick={() => setSelectedCategoryChip('receita')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              selectedCategoryChip === 'receita'
-                ? 'bg-[#006948] text-white font-bold shadow-2xs'
-                : 'bg-[#f8faff] border border-[#e5eeff] text-[#0b1c30] hover:bg-[#eff4ff]'
-            }`}
-          >
-            💰 Receitas ({categoryCounts.receita})
-          </button>
         </div>
       </div>
 
@@ -545,8 +528,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             </button>
 
             <div className="flex items-center gap-3 pb-3 border-b border-[#f1f5f9]">
-              <div className="w-11 h-11 rounded-xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center font-bold font-mono">
-                {selectedTransactionDetail.tipo === 'receita' ? '+' : '-'}
+              <div className="w-11 h-11 rounded-xl bg-[#fee2e2] text-[#dc2626] flex items-center justify-center font-bold font-mono">
+                -
               </div>
               <div className="min-w-0 flex-1">
                 <h4 className="font-display font-bold text-base text-[#0b1c30] truncate">

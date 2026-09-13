@@ -85,14 +85,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // 2. Financial Metrics from real database
   const metrics = useMemo(() => {
     const expenses = relevantTransactions.filter((t) => t.tipo === 'despesa');
-    const revenues = relevantTransactions.filter((t) => t.tipo === 'receita');
-
     const totalGastos = expenses.reduce((acc, t) => acc + t.valor, 0);
-    // Calculate total revenues; if not yet launched in month, use official salaries (Felipe 4500 + Genivânia 4000 = 8500)
-    let totalReceitas = revenues.reduce((acc, t) => acc + t.valor, 0);
-    if (totalReceitas === 0) {
-      totalReceitas = 8500.0;
-    }
 
     // Macro Categories
     const gastoInvariavel = expenses
@@ -130,8 +123,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const goalLazer = goals.find((g) => (g.subcategoria || g.titulo || '').toLowerCase().includes('lazer'))?.valorPlanejado || 1200;
     const goalFarmacia = goals.find((g) => (g.subcategoria || g.titulo || '').toLowerCase().includes('farmacia'))?.valorPlanejado || 450;
 
+    const goalEconomia = goals.find((g) => (g.subcategoria || g.titulo || '').toLowerCase().includes('economia'))?.valorPlanejado || 3500;
     const expectativaPrevista = goalSuper + goalCarro + goalLazer + goalFarmacia + (gastoInvariavel || 3580);
-    const saldoLiquido = totalReceitas - totalGastos;
+    const saldoOrcamento = expectativaPrevista - totalGastos;
 
     // Couple Share calculation
     const felipeGasto = expenses
@@ -147,8 +141,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     return {
       totalGastos,
-      totalReceitas,
-      saldoLiquido,
+      orcamentoTotal: expectativaPrevista,
+      saldoOrcamento,
+      goalEconomia,
       expectativaPrevista,
       gastoInvariavel,
       gastoVariavel,
@@ -569,22 +564,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* 4 KPI Top Cards Dinâmicos */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-          {/* KPI 1: Receitas */}
+          {/* KPI 1: Orçamento Previsto */}
           <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#565e74] font-medium">Receita Total Líquida</span>
-                <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
+                <span className="text-xs text-[#565e74] font-medium">Orçamento Mensal Previsto</span>
+                <div className="w-7 h-7 rounded-lg bg-[#eff4ff] text-[#006194] flex items-center justify-center">
                   <Receipt className="w-4 h-4" />
                 </div>
               </div>
               <div className="font-display font-extrabold text-2xl text-[#0b1c30] mt-2 font-mono">
-                {formatBRL(metrics.totalReceitas)}
+                {formatBRL(metrics.expectativaPrevista)}
               </div>
             </div>
-            <div className="text-xs text-[#006948] font-medium mt-3 flex items-center gap-1">
-              <span>↑ 100% depositado</span>
-              <span className="text-[#565e74]">• Felipe & Genivânia</span>
+            <div className="text-xs text-[#006194] font-medium mt-3 flex items-center gap-1">
+              <span>Tetos fixos e variáveis</span>
+              <span className="text-[#565e74]">• Metas Supabase</span>
             </div>
           </div>
 
@@ -597,58 +592,58 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <FileSpreadsheet className="w-4 h-4" />
                 </div>
               </div>
-              <div className="font-display font-extrabold text-2xl text-[#0b1c30] mt-2 font-mono">
+              <div className="font-display font-extrabold text-2xl text-[#ba1a1a] mt-2 font-mono">
                 {formatBRL(metrics.totalGastos)}
               </div>
             </div>
             <div className="text-xs text-[#565e74] mt-3">
-              {orcamentoPercent}% da renda • {metrics.totalCount} lançamentos
+              {orcamentoPercent}% do orçamento consumido • {metrics.totalCount} compras
             </div>
           </div>
 
-          {/* KPI 3: Expectativa / Tetos */}
+          {/* KPI 3: Saldo do Orçamento (Folga Restante) */}
           <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#565e74] font-medium">Expectativa Prevista</span>
+                <span className="text-xs text-[#565e74] font-medium">Saldo Restante do Teto</span>
                 <span
                   className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                    metrics.totalGastos <= metrics.expectativaPrevista
+                    metrics.saldoOrcamento >= 0
                       ? 'bg-[#dcfce7] text-[#006948]'
                       : 'bg-[#fee2e2] text-[#dc2626]'
                   }`}
                 >
-                  {metrics.totalGastos <= metrics.expectativaPrevista ? 'No teto' : 'Acima do teto'}
+                  {metrics.saldoOrcamento >= 0 ? 'Dentro do teto' : 'Acima do teto'}
                 </span>
               </div>
-              <div className="font-display font-extrabold text-2xl text-[#0b1c30] mt-2 font-mono">
-                {formatBRL(metrics.expectativaPrevista)}
+              <div
+                className={`font-display font-extrabold text-2xl mt-2 font-mono ${
+                  metrics.saldoOrcamento >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'
+                }`}
+              >
+                {formatBRL(metrics.saldoOrcamento)}
               </div>
             </div>
             <div className="text-xs text-[#565e74] font-medium mt-3 flex items-center gap-1">
-              <span>Metas orçamentárias do Supabase</span>
+              <span>{metrics.saldoOrcamento >= 0 ? '✓ Disponível para gastos' : '⚠️ Atenção aos limites'}</span>
             </div>
           </div>
 
-          {/* KPI 4: Economia / Saldo */}
+          {/* KPI 4: Meta de Economia Conjunta */}
           <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#565e74] font-medium">Saldo / Economia</span>
+                <span className="text-xs text-[#565e74] font-medium">Meta de Economia Mensal</span>
                 <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
               </div>
-              <div
-                className={`font-display font-extrabold text-2xl mt-2 font-mono ${
-                  metrics.saldoLiquido >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'
-                }`}
-              >
-                {formatBRL(metrics.saldoLiquido)}
+              <div className="font-display font-extrabold text-2xl text-[#006948] mt-2 font-mono">
+                {formatBRL(metrics.goalEconomia)}
               </div>
             </div>
             <div className="text-xs text-[#006948] font-medium mt-3 flex items-center gap-1">
-              <span>✓ Aporte para investimentos</span>
+              <span>✓ Reserva e investimentos do casal</span>
             </div>
           </div>
         </div>

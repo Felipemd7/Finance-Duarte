@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   X,
   Plus,
-  ArrowDownLeft,
-  ArrowUpRight,
   Users,
   CreditCard,
   Building2,
@@ -26,7 +24,6 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   onSave,
   defaultMonth,
 }) => {
-  const [tipo, setTipo] = useState<'despesa' | 'receita'>('despesa');
   const [estabelecimento, setEstabelecimento] = useState('');
   const [valor, setValor] = useState('');
   const [data, setData] = useState(new Date().toISOString().split('T')[0]);
@@ -47,8 +44,8 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       id: 'tx-' + Date.now(),
       usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
       data,
-      tipo,
-      categoria: tipo === 'receita' ? 'Receita' : categoria,
+      tipo: 'despesa',
+      categoria,
       subcategoria,
       estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
       valor: numVal,
@@ -69,7 +66,6 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
     Invariável: ['Aluguel', 'Condomínio', 'Seguro (Carro)', 'Rastreador', 'Plano de Saúde', 'Internet / TV'],
     Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Lazer', 'Manutenção de carro', 'Energia Elétrica', 'Gás'],
     'Extra/Eventualidades': ['IPVA', 'Presentes & Comemorações', 'Médico / Exames', 'Viagem', 'Manutenção Casa'],
-    Receita: ['Salário Felipe', 'Salário Genivânia', 'Rendimento / Outros'],
   };
 
   return (
@@ -82,7 +78,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             </div>
             <div>
               <h3 className="font-display font-bold text-base text-[#0b1c30]">
-                Novo Lançamento Financeiro
+                Novo Lançamento de Despesa
               </h3>
               <p className="text-xs text-[#565e74]">Casal Duarte • {defaultMonth}</p>
             </div>
@@ -96,34 +92,6 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
-          {/* Tipo Selector */}
-          <div className="grid grid-cols-2 gap-2 bg-[#eff4ff] p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setTipo('despesa')}
-              className={`py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                tipo === 'despesa'
-                  ? 'bg-white text-[#0b1c30] shadow-xs'
-                  : 'text-[#565e74]'
-              }`}
-            >
-              <ArrowUpRight className="w-4 h-4 text-[#ba1a1a]" />
-              <span>Despesa</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTipo('receita')}
-              className={`py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                tipo === 'receita'
-                  ? 'bg-white text-[#006948] shadow-xs'
-                  : 'text-[#565e74]'
-              }`}
-            >
-              <ArrowDownLeft className="w-4 h-4 text-[#006948]" />
-              <span>Receita / Entrada</span>
-            </button>
-          </div>
-
           {/* Valor */}
           <div>
             <label className="text-xs font-semibold text-[#0b1c30]">Valor (R$)</label>
@@ -145,7 +113,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-[#0b1c30]">
-                {tipo === 'despesa' ? 'Estabelecimento / Local' : 'Fonte / Pagador'}
+                Estabelecimento / Local
               </label>
               <input
                 type="text"
@@ -170,41 +138,39 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
           </div>
 
           {/* Categoria & Subcategoria */}
-          {tipo === 'despesa' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs font-semibold text-[#0b1c30]">Categoria</label>
-                <select
-                  value={categoria}
-                  onChange={(e) => {
-                    const newCat = e.target.value as CategoryType;
-                    setCategoria(newCat);
-                    setSubcategoria(subcategoryOptions[newCat]?.[0] || '');
-                  }}
-                  className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
-                >
-                  <option value="Variável">Variável (Dia a dia)</option>
-                  <option value="Invariável">Invariável (Custos fixos)</option>
-                  <option value="Extra/Eventualidades">Extra / Eventualidades</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-[#0b1c30]">Subcategoria</label>
-                <select
-                  value={subcategoria}
-                  onChange={(e) => setSubcategoria(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
-                >
-                  {(subcategoryOptions[categoria] || []).map((sub) => (
-                    <option key={sub} value={sub}>
-                      {sub}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-semibold text-[#0b1c30]">Categoria</label>
+              <select
+                value={categoria}
+                onChange={(e) => {
+                  const newCat = e.target.value as CategoryType;
+                  setCategoria(newCat);
+                  setSubcategoria(subcategoryOptions[newCat]?.[0] || '');
+                }}
+                className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
+              >
+                <option value="Variável">Variável (Dia a dia)</option>
+                <option value="Invariável">Invariável (Custos fixos)</option>
+                <option value="Extra/Eventualidades">Extra / Eventualidades</option>
+              </select>
             </div>
-          )}
+
+            <div>
+              <label className="text-xs font-semibold text-[#0b1c30]">Subcategoria</label>
+              <select
+                value={subcategoria}
+                onChange={(e) => setSubcategoria(e.target.value)}
+                className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
+              >
+                {(subcategoryOptions[categoria] || []).map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {/* Forma de Pagamento */}
           <div>

@@ -120,7 +120,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const isEstouradoGeral = totalDespesas > totalExpectativa;
   const diasNoPeriodo = selectedMonth === '2026-all' ? 243 : 31;
   const mediaDiaria = totalDespesas / diasNoPeriodo;
-  const taxaPoupanca = totalReceitas > 0 ? Math.round((saldo / totalReceitas) * 100) : 0;
+  const taxaPoupanca = (totalReceitas && totalReceitas > 0) ? Math.round((saldo / totalReceitas) * 100) : 0;
 
   // 2. Car Expenses deep-dive
   const carKeywords = ['combustível', 'rastreador', 'seguro', 'ipva', 'manutenção de carro', 'pedágio', 'estacionamento'];
@@ -1141,8 +1141,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         {/* Print KPI row */}
         <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
           <div>
-            <span className="text-slate-500 block">Receitas Totais</span>
-            <span className="text-base font-bold">{formatBRL(totalReceitas)}</span>
+            <span className="text-slate-500 block">Orçamento Total</span>
+            <span className="text-base font-bold">{formatBRL(totalExpectativa)}</span>
           </div>
           <div>
             <span className="text-slate-500 block">Expectativa Planejada</span>

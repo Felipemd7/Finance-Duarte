@@ -7,8 +7,7 @@
 INSERT INTO public.categories (id, nome, cor, icone, descricao) VALUES
 ('cat-invariavel', 'Invariável', '#3b82f6', 'Lock', 'Custos fixos e essenciais que ocorrem todos os meses'),
 ('cat-variavel', 'Variável', '#10b981', 'ShoppingBag', 'Despesas do dia a dia sujeitas a flutuação e controle'),
-('cat-extra', 'Extra/Eventualidades', '#f59e0b', 'AlertTriangle', 'Despesas sazonais, emergências, carro e investimentos'),
-('cat-receita', 'Receita', '#22c55e', 'TrendingUp', 'Renda e salários do casal')
+('cat-extra', 'Extra/Eventualidades', '#f59e0b', 'AlertTriangle', 'Despesas sazonais, emergências, carro e investimentos')
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. SUBCATEGORIAS

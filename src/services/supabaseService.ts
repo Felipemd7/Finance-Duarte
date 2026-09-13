@@ -80,7 +80,6 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
         const extracted = obs.replace(/^Gasto registrado:\s*/i, '').trim();
         if (extracted) return extracted;
       }
-      if (tipo === 'receita') return 'Receita / Salário';
       if (!id) return 'Diversos';
 
       const fixes: Record<string, string> = {
@@ -133,7 +132,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
         mes_ano: t.mes_referencia,
         valor: Number(t.valor),
         tipo: t.tipo as any,
-        categoria: t.categoria_id === 'cat-invariavel' ? 'Invariável' : t.categoria_id === 'cat-extra' ? 'Extra/Eventualidades' : t.categoria_id === 'cat-receita' ? 'Receita' : 'Variável',
+        categoria: t.categoria_id === 'cat-invariavel' ? 'Invariável' : t.categoria_id === 'cat-extra' ? 'Extra/Eventualidades' : 'Variável',
         categoria_id: t.categoria_id,
         subcategoria: t.subcategoria_id.replace('sub-', '').replace(/-/g, ' '),
         subcategoria_id: t.subcategoria_id,
@@ -294,7 +293,7 @@ export async function addTransactionToCloud(tx: Transaction): Promise<boolean> {
       tipo: tx.tipo,
       forma_pagamento: tx.formaPagamento || 'Cartão de Crédito',
       status: tx.status || 'pago',
-      categoria_id: tx.categoria === 'Invariável' ? 'cat-invariavel' : tx.categoria === 'Extra/Eventualidades' ? 'cat-extra' : tx.categoria === 'Receita' ? 'cat-receita' : 'cat-variavel',
+      categoria_id: tx.categoria === 'Invariável' ? 'cat-invariavel' : tx.categoria === 'Extra/Eventualidades' ? 'cat-extra' : 'cat-variavel',
       subcategoria_id: tx.subcategoria_id || 'sub-supermercado',
       estabelecimento_nome: tx.estabelecimento,
       observacoes: tx.observacoes,
@@ -373,7 +372,7 @@ export async function updateTransactionInCloud(tx: Transaction): Promise<boolean
       tipo: tx.tipo,
       forma_pagamento: tx.formaPagamento || 'Cartão de Crédito',
       status: tx.status || 'pago',
-      categoria_id: tx.categoria === 'Invariável' ? 'cat-invariavel' : tx.categoria === 'Extra/Eventualidades' ? 'cat-extra' : tx.categoria === 'Receita' ? 'cat-receita' : 'cat-variavel',
+      categoria_id: tx.categoria === 'Invariável' ? 'cat-invariavel' : tx.categoria === 'Extra/Eventualidades' ? 'cat-extra' : 'cat-variavel',
       subcategoria_id: tx.subcategoria_id || 'sub-supermercado',
       estabelecimento_nome: tx.estabelecimento,
       observacoes: tx.observacoes,

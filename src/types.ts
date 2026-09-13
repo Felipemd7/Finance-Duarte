@@ -3,7 +3,7 @@
 // Felipe Duarte & Genivânia Duarte (2026)
 // =====================================================================
 
-export type CategoryType = 'Invariável' | 'Variável' | 'Extra/Eventualidades' | 'Receita';
+export type CategoryType = 'Invariável' | 'Variável' | 'Extra/Eventualidades';
 
 export type PaymentMethod =
   | 'Cartão de Crédito'
@@ -21,7 +21,7 @@ export type PaymentMethod =
   | string;
 
 export type TransactionStatus = 'pago' | 'previsto';
-export type TransactionType = 'despesa' | 'receita';
+export type TransactionType = 'despesa';
 export type UserRole = 'Felipe' | 'Genivânia' | 'Casal' | string;
 
 export interface User {
@@ -291,7 +291,8 @@ export interface WeeklyMetric {
 }
 
 export interface DashboardMetrics {
-  totalReceitas: number;
+  totalReceitas?: number;
+  orcamentoTotal?: number;
   totalDespesas: number;
   saldo: number;
   totalExpectativa: number;
