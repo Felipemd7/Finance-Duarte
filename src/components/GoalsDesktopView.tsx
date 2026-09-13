@@ -76,6 +76,10 @@ interface GoalsDesktopViewProps {
   onAddGoal?: (goal: FinancialGoal) => void;
   onUpdateGoal?: (goal: FinancialGoal) => void;
   onDeleteGoal?: (id: string) => void;
+  fuelLogs?: FuelLog[];
+  onAddFuelLog?: (log: FuelLog) => void;
+  onUpdateFuelLog?: (log: FuelLog) => void;
+  onDeleteFuelLog?: (id: string) => void;
 }
 
 const DEFAULT_CATEGORIES: BudgetCategoryItem[] = [
@@ -134,7 +138,7 @@ const DEFAULT_CATEGORIES: BudgetCategoryItem[] = [
 const DEFAULT_CAR_COSTS: CarPlanningItem[] = [
   {
     id: 'car-ipva',
-    title: 'IPVA 2026 (SP)',
+    title: 'IPVA 2026 (PI)',
     amount: 3200,
     badge: '3 de 5 Quitadas',
     subtext: 'Parcelas de R$ 640,00/mês',
@@ -174,6 +178,10 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   goals = [],
   transactions = [],
   selectedMonth = 'Março 2026',
+  fuelLogs: propFuelLogs,
+  onAddFuelLog: propAddFuelLog,
+  onUpdateFuelLog: propUpdateFuelLog,
+  onDeleteFuelLog: propDeleteFuelLog,
 }) => {
   // Converte nome do mês para código 'YYYY-MM'
   const activeMonthCode = useMemo(() => {
@@ -280,7 +288,16 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   // Car Costs State
   const [carCosts, setCarCosts] = useState<CarPlanningItem[]>(() => {
     const saved = localStorage.getItem('duarte_car_costs');
-    return saved ? JSON.parse(saved) : DEFAULT_CAR_COSTS;
+    if (saved) {
+      try {
+        const parsed: CarPlanningItem[] = JSON.parse(saved);
+        return parsed.map((c) => ({
+          ...c,
+          title: c.title.replace('(SP)', '(PI)'),
+        }));
+      } catch {}
+    }
+    return DEFAULT_CAR_COSTS;
   });
 
   useEffect(() => {
@@ -289,9 +306,23 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
   // Fuel Logs State (Telemetria, Odômetro & Comprovantes)
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(() => {
+    if (propFuelLogs && propFuelLogs.length > 0) return propFuelLogs;
     const saved = localStorage.getItem('duarte_fuel_logs');
-    return saved ? JSON.parse(saved) : INITIAL_FUEL_LOGS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return INITIAL_FUEL_LOGS;
   });
+
+  useEffect(() => {
+    if (propFuelLogs && propFuelLogs.length > 0) {
+      setFuelLogs(propFuelLogs);
+      localStorage.setItem('duarte_fuel_logs', JSON.stringify(propFuelLogs));
+    }
+  }, [propFuelLogs]);
 
   useEffect(() => {
     localStorage.setItem('duarte_fuel_logs', JSON.stringify(fuelLogs));
@@ -299,14 +330,17 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
   const handleAddFuelLog = (log: FuelLog) => {
     setFuelLogs((prev) => [...prev, log]);
+    if (propAddFuelLog) propAddFuelLog(log);
   };
 
   const handleUpdateFuelLog = (log: FuelLog) => {
     setFuelLogs((prev) => prev.map((item) => (item.id === log.id ? log : item)));
+    if (propUpdateFuelLog) propUpdateFuelLog(log);
   };
 
   const handleDeleteFuelLog = (id: string) => {
     setFuelLogs((prev) => prev.filter((item) => item.id !== id));
+    if (propDeleteFuelLog) propDeleteFuelLog(id);
   };
 
   // Modal States
@@ -726,11 +760,11 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                 Planejamento & Custos Fixos Anuais
               </h3>
               <p className="text-xs text-[#565e74]">
-                Provisões e rateio 50% Felipe / 50% Genivânia • Total orçado: R$ 9.188,00/ano
+                Provisões do Orçamento Familiar Conjunto • Total orçado: R$ 9.188,00/ano
               </p>
             </div>
             <span className="text-xs font-bold text-[#006194] bg-[#eff4ff] px-3 py-1 rounded-full border border-[#dce9ff]">
-              Rateio fixo rateado: ~R$ 0,53 / km
+              Custo fixo provisionado: ~R$ 0,53 / km
             </span>
           </div>
 

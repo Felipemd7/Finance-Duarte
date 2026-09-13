@@ -17,9 +17,15 @@ import {
   INITIAL_TRANSACTIONS,
   INITIAL_GOALS,
   INITIAL_SPREADSHEETS,
+  INITIAL_FUEL_LOGS,
 } from './data/initialData';
-import { Transaction, Receipt, FinancialGoal, SpreadsheetRow, User } from './types';
-import { fetchSupabaseData } from './services/supabaseService';
+import { Transaction, Receipt, FinancialGoal, SpreadsheetRow, User, FuelLog } from './types';
+import {
+  fetchSupabaseData,
+  addFuelLogToCloud,
+  updateFuelLogInCloud,
+  deleteFuelLogFromCloud,
+} from './services/supabaseService';
 
 export default function App() {
   // Current active tab - default to 'dashboard' (Visão Consolidada do Casal)
@@ -52,6 +58,16 @@ export default function App() {
     const saved = localStorage.getItem('duarte_spreadsheets');
     return saved ? JSON.parse(saved) : INITIAL_SPREADSHEETS;
   });
+  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(() => {
+    const saved = localStorage.getItem('duarte_fuel_logs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return INITIAL_FUEL_LOGS;
+  });
 
   // Modals
   const [isNewTxModalOpen, setIsNewTxModalOpen] = useState(false);
@@ -74,6 +90,7 @@ export default function App() {
         setTransactions(cloudData.transactions);
         if (cloudData.goals.length > 0) setGoals(cloudData.goals);
         if (cloudData.spreadsheets.length > 0) setSpreadsheets(cloudData.spreadsheets);
+        if (cloudData.fuelLogs && cloudData.fuelLogs.length > 0) setFuelLogs(cloudData.fuelLogs);
         setIsSupabaseSynced(true);
         setSyncStatusText(`🟢 Supabase Conectado • ${cloudData.transactions.length} transações de Felipe & Genivânia sincronizadas`);
       } else {
@@ -99,6 +116,26 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('duarte_spreadsheets', JSON.stringify(spreadsheets));
   }, [spreadsheets]);
+
+  useEffect(() => {
+    localStorage.setItem('duarte_fuel_logs', JSON.stringify(fuelLogs));
+  }, [fuelLogs]);
+
+  // Handlers para Abastecimentos de Combustível (Compass)
+  const handleAddFuelLog = async (log: FuelLog) => {
+    setFuelLogs((prev) => [...prev, log]);
+    await addFuelLogToCloud(log);
+  };
+
+  const handleUpdateFuelLog = async (log: FuelLog) => {
+    setFuelLogs((prev) => prev.map((f) => (f.id === log.id ? log : f)));
+    await updateFuelLogInCloud(log);
+  };
+
+  const handleDeleteFuelLog = async (id: string) => {
+    setFuelLogs((prev) => prev.filter((f) => f.id !== id));
+    await deleteFuelLogFromCloud(id);
+  };
 
   // Handler: Approve and reconcile receipt
   const handleApproveReceipt = (receipt: Receipt) => {
@@ -259,6 +296,10 @@ export default function App() {
             selectedMonth={selectedMonth}
             onAddGoal={handleAddGoal}
             onUpdateGoal={handleUpdateGoal}
+            fuelLogs={fuelLogs}
+            onAddFuelLog={handleAddFuelLog}
+            onUpdateFuelLog={handleUpdateFuelLog}
+            onDeleteFuelLog={handleDeleteFuelLog}
           />
         )}
 

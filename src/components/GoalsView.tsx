@@ -35,7 +35,7 @@ import {
   Code2,
   Terminal,
 } from 'lucide-react';
-import { FinancialGoal, Transaction } from '../types';
+import { FinancialGoal, Transaction, FuelLog } from '../types';
 import { formatBRL } from '../utils/formatters';
 
 interface GoalsViewProps {
@@ -44,6 +44,10 @@ interface GoalsViewProps {
   selectedMonth?: string;
   onAddGoal?: (goal: FinancialGoal) => void;
   onUpdateGoal?: (goal: FinancialGoal) => void;
+  fuelLogs?: FuelLog[];
+  onAddFuelLog?: (log: FuelLog) => void;
+  onUpdateFuelLog?: (log: FuelLog) => void;
+  onDeleteFuelLog?: (id: string) => void;
 }
 
 interface ShoppingListItem {
@@ -65,6 +69,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
   selectedMonth = 'Março 2026',
   onAddGoal,
   onUpdateGoal,
+  fuelLogs,
+  onAddFuelLog,
+  onUpdateFuelLog,
+  onDeleteFuelLog,
 }) => {
   // Mobile Top Switcher: 'compras' (Lista de Compras) vs 'carro' (Metas & Carro)
   const [activeSubTab, setActiveSubTab] = useState<'compras' | 'carro'>('compras');
@@ -838,6 +846,10 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
         selectedMonth={selectedMonth}
         onAddGoal={onAddGoal}
         onUpdateGoal={onUpdateGoal}
+        fuelLogs={fuelLogs}
+        onAddFuelLog={onAddFuelLog}
+        onUpdateFuelLog={onUpdateFuelLog}
+        onDeleteFuelLog={onDeleteFuelLog}
       />
       {/* ========================================================================= */}
       {/* MODAL: Nova Meta Financeira do Casal                                      */}

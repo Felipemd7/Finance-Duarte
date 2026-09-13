@@ -416,4 +416,75 @@ export async function deleteShoppingItemInCloud(id: string): Promise<boolean> {
   }
 }
 
+// ---------------------------------------------------------
+// FUEL LOGS (Gestão Veicular & Abastecimentos do Compass)
+// ---------------------------------------------------------
+
+export async function addFuelLogToCloud(log: FuelLog): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase.from('fuel_logs').insert({
+      id: log.id,
+      veiculo_id: log.veiculoId || 'veh-compass',
+      usuario_id: log.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+      data: log.data.slice(0, 10),
+      posto_nome: log.posto,
+      combustivel: log.combustivel,
+      valor_total: log.valorTotal,
+      preco_litro: log.precoLitro,
+      litros: log.litros,
+      km_atual: log.kmAtual,
+      km_rodados: log.kmRodados || 0,
+      consumo_km_l: log.consumoKmPorLitro || 0,
+      custo_por_km: log.custoPorKm || 0,
+      forma_pagamento: log.formaPagamento || 'Cartão de Crédito NuBank',
+      comprovante_url: log.comprovanteUrl || null,
+      observacoes: log.observacoes || null,
+    });
+    return !error;
+  } catch (err) {
+    console.error('[SupabaseService] Erro ao salvar abastecimento:', err);
+    return false;
+  }
+}
+
+export async function updateFuelLogInCloud(log: FuelLog): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase
+      .from('fuel_logs')
+      .update({
+        data: log.data.slice(0, 10),
+        posto_nome: log.posto,
+        combustivel: log.combustivel,
+        valor_total: log.valorTotal,
+        preco_litro: log.precoLitro,
+        litros: log.litros,
+        km_atual: log.kmAtual,
+        km_rodados: log.kmRodados || 0,
+        consumo_km_l: log.consumoKmPorLitro || 0,
+        custo_por_km: log.custoPorKm || 0,
+        forma_pagamento: log.formaPagamento || 'Cartão de Crédito NuBank',
+        observacoes: log.observacoes || null,
+      })
+      .eq('id', log.id);
+    return !error;
+  } catch (err) {
+    console.error('[SupabaseService] Erro ao atualizar abastecimento:', err);
+    return false;
+  }
+}
+
+export async function deleteFuelLogFromCloud(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase.from('fuel_logs').delete().eq('id', id);
+    return !error;
+  } catch (err) {
+    console.error('[SupabaseService] Erro ao excluir abastecimento:', err);
+    return false;
+  }
+}
+
+
 
