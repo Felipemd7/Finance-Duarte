@@ -448,11 +448,6 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
       return;
     }
 
-    if (numKm <= 0) {
-      alert('Por favor, informe a quilometragem (KM) do carro no odômetro.');
-      return;
-    }
-
     const newLog: FuelLog = {
       id: editingLog ? editingLog.id : `fuel-${Date.now()}`,
       data: formDate,
@@ -1114,12 +1109,12 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
             {/* FORM */}
             <form onSubmit={handleSaveFuelLog} className="flex flex-col gap-3.5">
-              {/* Odômetro KM Field (Highlighted prominently) */}
-              <div className="bg-[#ecfdf5] rounded-2xl p-3.5 border border-[#a7f3d0]">
+              {/* Odômetro KM Field (Opcional) */}
+              <div className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#dce9ff]">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-[#006948] flex items-center gap-1">
+                  <label className="text-xs font-bold text-[#006194] flex items-center gap-1">
                     <Gauge className="w-4 h-4" />
-                    <span>Quilometragem no Painel (KM Odômetro) *</span>
+                    <span>Quilometragem no Painel (KM Odômetro) <span className="text-[10px] font-normal text-[#565e74]">(Opcional)</span></span>
                   </label>
                   {lastKnownKm > 0 && (
                     <span className="text-[11px] text-[#565e74] font-mono">
@@ -1131,9 +1126,8 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                   type="number"
                   value={formKmAtual}
                   onChange={(e) => setFormKmAtual(e.target.value)}
-                  placeholder="Ex: 41740"
-                  className="w-full px-3 py-2 bg-white border border-[#006948]/30 rounded-xl text-sm font-mono font-bold text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                  required
+                  placeholder="Ex: 85000 (Opcional - deixe vazio se não anotou)"
+                  className="w-full px-3 py-2 bg-white border border-[#dce9ff] rounded-xl text-sm font-mono font-bold text-[#0b1c30] focus:outline-none focus:border-[#006194]"
                 />
                 {computedDeltaKm > 0 && (
                   <div className="mt-2 flex items-center justify-between text-xs text-[#006948] font-bold font-mono">
