@@ -42,32 +42,53 @@ export default function App() {
   // Core Data State
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [receipts, setReceipts] = useState<Receipt[]>(() => {
-    const saved = localStorage.getItem('duarte_receipts');
-    return saved ? JSON.parse(saved) : INITIAL_RECEIPTS;
+    try {
+      const saved = localStorage.getItem('duarte_receipts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return INITIAL_RECEIPTS;
   });
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('duarte_transactions');
-    if (saved && !saved.includes('guilherme') && !saved.includes('mariana')) {
-      return JSON.parse(saved);
-    }
+    try {
+      const saved = localStorage.getItem('duarte_transactions');
+      if (saved && !saved.includes('guilherme') && !saved.includes('mariana')) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
     return INITIAL_TRANSACTIONS;
   });
   const [goals, setGoals] = useState<FinancialGoal[]>(() => {
-    const saved = localStorage.getItem('duarte_goals');
-    return saved ? JSON.parse(saved) : INITIAL_GOALS;
+    try {
+      const saved = localStorage.getItem('duarte_goals');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return INITIAL_GOALS;
   });
   const [spreadsheets, setSpreadsheets] = useState<SpreadsheetRow[]>(() => {
-    const saved = localStorage.getItem('duarte_spreadsheets');
-    return saved ? JSON.parse(saved) : INITIAL_SPREADSHEETS;
+    try {
+      const saved = localStorage.getItem('duarte_spreadsheets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return INITIAL_SPREADSHEETS;
   });
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(() => {
-    const saved = localStorage.getItem('duarte_fuel_logs');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('duarte_fuel_logs');
+      if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.length > 0) return parsed;
-      } catch {}
-    }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
     return INITIAL_FUEL_LOGS;
   });
 
@@ -77,48 +98,81 @@ export default function App() {
   // Sync with Supabase on Mount
   useEffect(() => {
     // Clear old mock cache if it had legacy users
-    const cachedTx = localStorage.getItem('duarte_transactions');
-    if (cachedTx && (cachedTx.includes('guilherme') || cachedTx.includes('mariana'))) {
-      localStorage.removeItem('duarte_transactions');
-      localStorage.removeItem('duarte_receipts');
-      localStorage.removeItem('duarte_goals');
-      localStorage.removeItem('duarte_spreadsheets');
-    }
+    try {
+      const cachedTx = localStorage.getItem('duarte_transactions');
+      if (cachedTx && (cachedTx.includes('guilherme') || cachedTx.includes('mariana'))) {
+        localStorage.removeItem('duarte_transactions');
+        localStorage.removeItem('duarte_receipts');
+        localStorage.removeItem('duarte_goals');
+        localStorage.removeItem('duarte_spreadsheets');
+      }
+    } catch {}
 
     async function loadCloudData() {
-      const cloudData = await fetchSupabaseData();
-      if (cloudData && cloudData.transactions.length > 0) {
-        if (cloudData.users.length > 0) setUsers(cloudData.users);
-        setTransactions(cloudData.transactions);
-        if (cloudData.goals.length > 0) setGoals(cloudData.goals);
-        if (cloudData.spreadsheets.length > 0) setSpreadsheets(cloudData.spreadsheets);
-        if (cloudData.fuelLogs && cloudData.fuelLogs.length > 0) setFuelLogs(cloudData.fuelLogs);
-        if (cloudData.receipts && cloudData.receipts.length > 0) setReceipts(cloudData.receipts);
-        setIsSupabaseSynced(true);
+      try {
+        const cloudData = await fetchSupabaseData();
+        if (cloudData && cloudData.transactions.length > 0) {
+          if (cloudData.users.length > 0) setUsers(cloudData.users);
+          setTransactions(cloudData.transactions);
+          if (cloudData.goals.length > 0) setGoals(cloudData.goals);
+          if (cloudData.spreadsheets.length > 0) setSpreadsheets(cloudData.spreadsheets);
+          if (cloudData.fuelLogs && cloudData.fuelLogs.length > 0) setFuelLogs(cloudData.fuelLogs);
+          if (cloudData.receipts && cloudData.receipts.length > 0) setReceipts(cloudData.receipts);
+          setIsSupabaseSynced(true);
+        }
+      } catch (err) {
+        console.warn('[App] Erro ao sincronizar dados da nuvem:', err);
       }
     }
     loadCloudData();
   }, []);
 
-  // Sync to localStorage
+  // Sync to localStorage com proteção contra QuotaExceededError
   useEffect(() => {
-    localStorage.setItem('duarte_receipts', JSON.stringify(receipts));
+    try {
+      // Remover imagemUrl pesada do localStorage para nunca estourar a cota de 5MB do celular
+      const sanitized = receipts.map((r) => {
+        if (r.imagemUrl && r.imagemUrl.length > 15000) {
+          return { ...r, imagemUrl: undefined };
+        }
+        return r;
+      });
+      localStorage.setItem('duarte_receipts', JSON.stringify(sanitized));
+    } catch (err) {
+      console.warn('[App] LocalStorage quota para receipts:', err);
+    }
   }, [receipts]);
 
   useEffect(() => {
-    localStorage.setItem('duarte_transactions', JSON.stringify(transactions));
+    try {
+      localStorage.setItem('duarte_transactions', JSON.stringify(transactions));
+    } catch (err) {
+      console.warn('[App] LocalStorage quota para transactions:', err);
+    }
   }, [transactions]);
 
   useEffect(() => {
-    localStorage.setItem('duarte_goals', JSON.stringify(goals));
+    try {
+      localStorage.setItem('duarte_goals', JSON.stringify(goals));
+    } catch (err) {
+      console.warn('[App] LocalStorage quota para goals:', err);
+    }
   }, [goals]);
 
   useEffect(() => {
-    localStorage.setItem('duarte_spreadsheets', JSON.stringify(spreadsheets));
+    try {
+      localStorage.setItem('duarte_spreadsheets', JSON.stringify(spreadsheets));
+    } catch (err) {
+      console.warn('[App] LocalStorage quota para spreadsheets:', err);
+    }
   }, [spreadsheets]);
 
   useEffect(() => {
-    localStorage.setItem('duarte_fuel_logs', JSON.stringify(fuelLogs));
+    try {
+      localStorage.setItem('duarte_fuel_logs', JSON.stringify(fuelLogs));
+    } catch (err) {
+      console.warn('[App] LocalStorage quota para fuel_logs:', err);
+    }
   }, [fuelLogs]);
 
   // Handlers para Abastecimentos de Combustível (Compass)

@@ -43,6 +43,7 @@ import {
 import { Receipt, PurchaseItem } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { analyzeReceiptDirect } from '../services/clientOcrService';
+import { compressImage } from '../utils/imageCompressor';
 
 interface ScannerViewProps {
   receipts: Receipt[];
@@ -98,40 +99,64 @@ const getMonthNameFromDate = (dateStr: string): string => {
   return 'Março 2026';
 };
 
-const mapReceiptToViewModel = (r: Receipt) => {
-  const items = (r.itens || []).map((it: any, idx: number) => {
-    const isRemedio =
-      (it.categoriaItem || '').toLowerCase().includes('reméd') ||
-      (it.categoriaItem || '').toLowerCase().includes('farm');
+const mapReceiptToViewModel = (r: any) => {
+  if (!r) {
     return {
-      id: it.id || `it-${idx}`,
-      nome: it.nome || it.nome_do_item || 'Item do Comprovante',
-      codEan: it.codEan || '',
+      id: 'rec-' + Date.now(),
+      numeroCupom: 'NFC-e #000000',
+      dataHora: new Date().toLocaleDateString('pt-BR'),
+      estabelecimento: 'Aguardando comprovante',
+      cnpj: '',
+      ie: '',
+      endereco: 'Teresina, PI',
+      ccf: '',
+      totalLido: 0,
+      meioPagamento: 'Cartão NuBank Compartilhado',
+      comprador: 'Felipe Duarte & Genivânia Duarte',
+      itens: [] as any[],
+    };
+  }
+
+  const safeId = String(r.id || Date.now());
+  const safeCupom = r.numeroCupom && String(r.numeroCupom).trim() ? String(r.numeroCupom) : `NFC-e #${safeId.slice(-6)}`;
+  const rawItems = Array.isArray(r.itens) ? r.itens : [];
+
+  const items = rawItems.filter(Boolean).map((it: any, idx: number) => {
+    const nome = String(it.nome || it.nome_do_item || 'Item do Comprovante');
+    const isRemedio =
+      nome.toLowerCase().includes('reméd') ||
+      nome.toLowerCase().includes('farm') ||
+      String(it.categoriaItem || '').toLowerCase().includes('reméd') ||
+      String(it.categoriaItem || '').toLowerCase().includes('farm');
+    return {
+      id: String(it.id || `it-${idx}`),
+      nome,
+      codEan: String(it.codEan || ''),
       qtd: Number(it.quantidade) || 1,
       unitario: Number(it.precoUnitario) || Number(it.precoTotal) || 0,
       subtotal: Number(it.precoTotal) || 0,
-      categoria: it.categoriaItem || 'Supermercado / Variável',
+      categoria: String(it.categoriaItem || 'Supermercado / Variável'),
       icon: isRemedio ? 'pill' : 'utensils',
       categoriaColor: isRemedio
         ? 'bg-[#fee2e2] text-[#dc2626] border-[#fecdd3]'
         : 'bg-[#ecfdf5] text-[#006948] border-[#a7f3d0]',
       desmembrado: !!it.desmembrado,
-      aviso: undefined,
+      aviso: it.motivoDesmembramento || undefined,
     };
   });
 
   return {
-    id: r.id,
-    numeroCupom: r.numeroCupom || `NFC-e #${r.id.slice(-6)}`,
-    dataHora: r.data,
-    estabelecimento: r.estabelecimento,
-    cnpj: '',
-    ie: '',
-    endereco: 'Teresina, PI',
-    ccf: '',
-    totalLido: Number(r.valorTotal) || 0,
-    meioPagamento: 'Cartão NuBank Compartilhado',
-    comprador: 'Felipe Duarte & Genivânia Duarte',
+    id: safeId,
+    numeroCupom: safeCupom,
+    dataHora: String(r.data || r.dataHora || new Date().toLocaleDateString('pt-BR')),
+    estabelecimento: String(r.estabelecimento || 'Estabelecimento Identificado'),
+    cnpj: String(r.cnpj || ''),
+    ie: String(r.ie || ''),
+    endereco: String(r.endereco || 'Teresina, PI'),
+    ccf: String(r.ccf || ''),
+    totalLido: Number(r.valorTotal) || Number(r.totalLido) || 0,
+    meioPagamento: String(r.meioPagamento || r.formaPagamento || 'Cartão NuBank Compartilhado'),
+    comprador: String(r.comprador || r.pagoPor || 'Felipe Duarte & Genivânia Duarte'),
     itens: items,
   };
 };
@@ -609,21 +634,19 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onerror = () => {
-      setIsScanningFile(false);
-      setScanStepMessage('');
-      showToast('Erro ao ler o arquivo selecionado.');
-    };
-
-    reader.onload = async () => {
-      const base64 = reader.result as string;
+    try {
+      setIsScanningFile(true);
+      setScanStepMessage('Otimizando imagem para alta precisão...');
+      const base64 = await compressImage(file, 1600, 0.82);
       setUploadedImage(base64);
       setLeftViewMode('photo');
-      fetchOcrForBase64(base64, file.type || 'image/jpeg', file.name);
-    };
-
-    reader.readAsDataURL(file);
+      fetchOcrForBase64(base64, 'image/jpeg', file.name);
+    } catch (err) {
+      console.error('Erro ao processar imagem:', err);
+      setIsScanningFile(false);
+      setScanStepMessage('');
+      showToast('Erro ao carregar a imagem. Tente novamente.');
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
