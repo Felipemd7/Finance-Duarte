@@ -35,6 +35,10 @@ import {
   MessageSquare,
   FileSpreadsheet,
   CreditCard,
+  Copy,
+  Link2,
+  Video,
+  VideoOff,
 } from 'lucide-react';
 import { Receipt, PurchaseItem } from '../types';
 import { formatBRL } from '../utils/formatters';
@@ -141,7 +145,19 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   onNavigateToExtrato,
   selectedMonth,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
+
+  // QR Code Scanner state
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrInputText, setQrInputText] = useState('');
+  const [qrActiveTab, setQrActiveTab] = useState<'camera' | 'manual'>('camera');
+  const [isQrCameraActive, setIsQrCameraActive] = useState(false);
+  const [qrCameraError, setQrCameraError] = useState<string | null>(null);
+  const [isProcessingQr, setIsProcessingQr] = useState(false);
+  const qrVideoRef = useRef<HTMLVideoElement>(null);
+  const qrStreamRef = useRef<MediaStream | null>(null);
 
   // Active extracted receipt state - starts with the first real receipt from DB or empty
   const [extractedReceipt, setExtractedReceipt] = useState(() => {
@@ -199,7 +215,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const [approvedMonth, setApprovedMonth] = useState<string | null>(null);
   const [showEditItemsModal, setShowEditItemsModal] = useState(false);
   const [showReceiptZoom, setShowReceiptZoom] = useState(false);
-  const [showQrModal, setShowQrModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -209,9 +224,363 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     }, 4000);
   };
 
+  // Botão 1: Dispara câmera nativa
+  const handleTriggerCamera = () => {
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
+  };
+
+  // Botão 2: Dispara seletor de arquivos / galeria de fotos (sem capture)
+  const handleTriggerGallery = () => {
+    if (galleryInputRef.current) {
+      galleryInputRef.current.click();
+    }
+  };
+
+  // Compatibilidade com desktop
   const handleTriggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+    handleTriggerGallery();
+  };
+
+  // Botão 3: Abre o modal dedicado de QR Code NFC-e
+  const handleTriggerQrCode = () => {
+    setShowQrModal(true);
+  };
+
+  // Funções da Câmera do Leitor de QR Code
+  const startQrCamera = async () => {
+    setQrCameraError(null);
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setQrCameraError('Acesso à câmera não suportado neste navegador. Use a opção de digitar a chave.');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      qrStreamRef.current = stream;
+      if (qrVideoRef.current) {
+        qrVideoRef.current.srcObject = stream;
+        await qrVideoRef.current.play();
+      }
+      setIsQrCameraActive(true);
+
+      // Suporte a BarcodeDetector nativo se disponível
+      if ('BarcodeDetector' in window) {
+        try {
+          // @ts-ignore
+          const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+          const scanInterval = setInterval(async () => {
+            if (!qrVideoRef.current || !qrStreamRef.current) {
+              clearInterval(scanInterval);
+              return;
+            }
+            try {
+              const barcodes = await detector.detect(qrVideoRef.current);
+              if (barcodes && barcodes.length > 0) {
+                clearInterval(scanInterval);
+                const rawVal = barcodes[0].rawValue;
+                stopQrCamera();
+                handleProcessQrValue(rawVal);
+              }
+            } catch {}
+          }, 400);
+        } catch {}
+      }
+    } catch (err: any) {
+      console.warn('[ScannerView] Câmera QR não iniciada:', err);
+      setQrCameraError('Permissão de câmera não concedida ou dispositivo ocupado. Use o botão "Capturar" ou digite a chave.');
+      setIsQrCameraActive(false);
+    }
+  };
+
+  const stopQrCamera = () => {
+    if (qrStreamRef.current) {
+      qrStreamRef.current.getTracks().forEach((track) => track.stop());
+      qrStreamRef.current = null;
+    }
+    setIsQrCameraActive(false);
+  };
+
+  // Iniciar e parar câmera ao abrir/fechar modal QR Code
+  React.useEffect(() => {
+    if (showQrModal && qrActiveTab === 'camera') {
+      startQrCamera();
+    } else {
+      stopQrCamera();
+    }
+    return () => {
+      stopQrCamera();
+    };
+  }, [showQrModal, qrActiveTab]);
+
+  // Capturar frame da câmera para leitura
+  const handleCaptureQrSnapshot = () => {
+    if (!qrVideoRef.current) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = qrVideoRef.current.videoWidth || 640;
+      canvas.height = qrVideoRef.current.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(qrVideoRef.current, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.85);
+        stopQrCamera();
+        setShowQrModal(false);
+        setUploadedImage(base64);
+        setLeftViewMode('photo');
+        setUploadedFileName('Captura_QRCode_NFCe.jpg');
+        fetchOcrForBase64(base64, 'image/jpeg', 'Captura_QRCode_NFCe.jpg');
+      }
+    } catch {
+      showToast('Erro ao capturar frame da câmera.');
+    }
+  };
+
+  // Mapeamento dos códigos UF do Brasil
+  const UF_MAP: Record<string, string> = {
+    '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA', '16': 'AP', '17': 'TO',
+    '21': 'MA', '22': 'PI', '23': 'CE', '24': 'RN', '25': 'PB', '26': 'PE', '27': 'AL',
+    '28': 'SE', '29': 'BA', '31': 'MG', '32': 'ES', '33': 'RJ', '35': 'SP', '41': 'PR',
+    '42': 'SC', '43': 'RS', '50': 'MS', '51': 'MT', '52': 'GO', '53': 'DF',
+  };
+
+  // Decodifica QR Code ou Chave de Acesso de 44 dígitos da NFC-e
+  const handleProcessQrValue = (rawInput: string) => {
+    if (!rawInput || !rawInput.trim()) {
+      showToast('Por favor, digite ou escaneie a Chave de Acesso ou Link da NFC-e.');
+      return;
+    }
+    setIsProcessingQr(true);
+    const cleaned = rawInput.trim();
+
+    // Extrair chave de 44 dígitos
+    const digitsOnly = cleaned.replace(/\D/g, '');
+    const keyMatch = digitsOnly.match(/\d{44}/);
+    const key = keyMatch ? keyMatch[0] : null;
+
+    // Verificar se veio valor na URL do QR Code (padrão vNF ou pipes |)
+    let valorEncontrado = 0;
+    if (cleaned.includes('|')) {
+      const parts = cleaned.split('|');
+      for (const p of parts) {
+        const num = parseFloat(p.replace(',', '.'));
+        if (!isNaN(num) && num > 0 && num < 50000 && (p.includes('.') || p.includes(','))) {
+          valorEncontrado = num;
+          break;
+        }
+      }
+    } else {
+      const valMatch = cleaned.match(/[?&]vNF=([0-9.,]+)/i);
+      if (valMatch) {
+        valorEncontrado = parseFloat(valMatch[1].replace(',', '.'));
+      }
+    }
+
+    if (key) {
+      const ufCode = key.slice(0, 2);
+      const uf = UF_MAP[ufCode] || 'PI';
+      const year = `20${key.slice(2, 4)}`;
+      const month = key.slice(4, 6);
+      const cnpjRaw = key.slice(6, 20);
+      const cnpjFmt = cnpjRaw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+      const numNota = parseInt(key.slice(25, 34), 10).toString();
+      const newId = `nfc-${Date.now()}`;
+      const dataIso = `${year}-${month}-15`;
+
+      const newModel = {
+        id: newId,
+        numeroCupom: `NFC-e #${numNota}`,
+        dataHora: `${dataIso} 12:00`,
+        estabelecimento: `Estabelecimento NFC-e (${uf})`,
+        cnpj: cnpjFmt,
+        ie: '',
+        endereco: `${uf}, Brasil`,
+        ccf: '',
+        totalLido: valorEncontrado || 0,
+        meioPagamento: 'Cartão NuBank / PIX',
+        comprador: 'Felipe Duarte & Genivânia Duarte',
+        itens: [
+          {
+            id: `it-${Date.now()}-1`,
+            nome: `Lançamento NFC-e #${numNota}`,
+            codEan: key.slice(0, 12),
+            qtd: 1,
+            unitario: valorEncontrado || 0,
+            subtotal: valorEncontrado || 0,
+            categoria: 'Supermercado / Variável',
+            icon: 'shopping-cart',
+            categoriaColor: 'bg-[#ecfdf5] text-[#006948] border-[#a7f3d0]',
+            desmembrado: false,
+            aviso: `Chave de Acesso Oficial: ${key}`,
+          },
+        ],
+      };
+
+      setExtractedReceipt(newModel);
+      setIsApproved(false);
+      setShowQrModal(false);
+      stopQrCamera();
+      showToast(`✅ NFC-e #${numNota} (${uf}) decodificada com sucesso!`);
+
+      // Persistir rascunho oficial
+      if (onSaveReceiptDraft) {
+        onSaveReceiptDraft({
+          id: newId,
+          data: dataIso,
+          estabelecimento: newModel.estabelecimento,
+          tipoEstabelecimento: 'Supermercado',
+          numeroCupom: newModel.numeroCupom,
+          valorTotal: valorEncontrado || 0,
+          status: 'Pendente',
+          itens: newModel.itens.map((it) => ({
+            id: it.id,
+            nome: it.nome,
+            categoriaItem: it.categoria,
+            quantidade: it.qtd,
+            precoUnitario: it.unitario,
+            precoTotal: it.subtotal,
+          })),
+        });
+      }
+    } else {
+      showToast('Chave de acesso não identificada. Insira os 44 números ou o link oficial da SEFAZ.');
+    }
+    setIsProcessingQr(false);
+  };
+
+  // Processar OCR com Gemini
+  const fetchOcrForBase64 = async (base64: string, mimeType: string, fileName: string) => {
+    setUploadedFileName(fileName);
+    setIsScanningFile(true);
+    setScanStepMessage(`Analisando "${fileName}" com Gemini Vision OCR...`);
+    showToast('IA examinando comprovante com visão computacional...');
+
+    try {
+      const response = await fetch('/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: mimeType || 'image/jpeg',
+        }),
+      });
+
+      const json = await response.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        const mappedItems = (d.itens || []).map((it: any, idx: number) => {
+          const isRemedio =
+            (it.categoriaItem || '').toLowerCase().includes('reméd') ||
+            (it.categoriaItem || '').toLowerCase().includes('farm') ||
+            (it.subcategoriaSugerida || '').toLowerCase().includes('farm');
+          return {
+            id: it.id || `it-${Date.now()}-${idx}`,
+            nome: it.nome || 'Produto / Item',
+            codEan: it.codigoEan || '',
+            qtd: Number(it.quantidade) || 1,
+            unitario: Number(it.precoUnitario) || Number(it.precoTotal) || 0,
+            subtotal: Number(it.precoTotal) || 0,
+            categoria: it.categoriaItem || it.subcategoriaSugerida || 'Alimentos (Supermercado / Variável)',
+            icon: isRemedio ? 'pill' : 'utensils',
+            categoriaColor: isRemedio
+              ? 'bg-[#fee2e2] text-[#dc2626] border-[#fecdd3]'
+              : 'bg-[#ecfdf5] text-[#006948] border-[#a7f3d0]',
+            desmembrado: !!it.desmembrado,
+            aviso: it.motivoDesmembramento || undefined,
+          };
+        });
+
+        const totalCalculated =
+          Number(d.valorTotal) ||
+          mappedItems.reduce((sum: number, it: any) => sum + (it.subtotal || 0), 0);
+
+        const newReceiptId = `nfc-${Date.now()}`;
+        const rawDate =
+          d.data && d.data !== 'Não identificado'
+            ? d.data
+            : new Date().toLocaleDateString('pt-BR');
+
+        const newReceiptModel = {
+          id: newReceiptId,
+          numeroCupom:
+            d.numeroCupom && d.numeroCupom !== 'Não identificado'
+              ? d.numeroCupom
+              : `NFC-e #${Math.floor(10000 + Math.random() * 90000)}`,
+          dataHora: rawDate,
+          estabelecimento:
+            d.estabelecimento && d.estabelecimento !== 'Não identificado'
+              ? d.estabelecimento
+              : 'Estabelecimento Identificado',
+          cnpj: d.cnpj && d.cnpj !== 'Não identificado' ? d.cnpj : '',
+          ie: d.ie || '',
+          endereco: d.endereco && d.endereco !== 'Não identificado' ? d.endereco : 'Teresina, PI',
+          ccf: d.ccf || '',
+          totalLido: totalCalculated,
+          meioPagamento:
+            d.formaPagamento && d.formaPagamento !== 'Não identificado'
+              ? d.formaPagamento
+              : 'Cartão NuBank Compartilhado',
+          comprador:
+            d.comprador && d.comprador !== 'Não identificado'
+              ? d.comprador
+              : 'Felipe Duarte & Genivânia Duarte',
+          itens: mappedItems,
+        };
+
+        setExtractedReceipt(newReceiptModel);
+        setIsApproved(false);
+        setApprovedMonth(null);
+
+        // Salvar rascunho no Supabase para garantir persistência na nuvem
+        if (onSaveReceiptDraft) {
+          const isFarm =
+            newReceiptModel.estabelecimento.toLowerCase().includes('farm') ||
+            newReceiptModel.estabelecimento.toLowerCase().includes('droga');
+          const isGas =
+            newReceiptModel.estabelecimento.toLowerCase().includes('posto') ||
+            newReceiptModel.estabelecimento.toLowerCase().includes('combust');
+
+          const draftObj: Receipt = {
+            id: newReceiptId,
+            data: rawDate,
+            estabelecimento: newReceiptModel.estabelecimento,
+            tipoEstabelecimento: isFarm ? 'Farmácia' : isGas ? 'Posto de combustível' : 'Supermercado',
+            numeroCupom: newReceiptModel.numeroCupom,
+            valorTotal: totalCalculated,
+            status: 'Pendente',
+            imagemUrl: base64,
+            itens: mappedItems.map((it) => ({
+              id: it.id,
+              nome: it.nome,
+              categoriaItem: it.categoria,
+              quantidade: it.qtd,
+              precoUnitario: it.unitario,
+              precoTotal: it.subtotal,
+              desmembrado: it.desmembrado,
+            })),
+          };
+
+          onSaveReceiptDraft(draftObj).then((saved) => {
+            if (saved) {
+              showToast(`✅ Comprovante "${d.estabelecimento}" lido com sucesso! Revise e aprove para lançar no Extrato.`);
+            } else {
+              showToast(`Comprovante lido com sucesso! ${mappedItems.length} itens extraídos.`);
+            }
+          });
+        } else {
+          showToast(`Comprovante "${d.estabelecimento}" lido com sucesso! ${mappedItems.length} itens extraídos.`);
+        }
+      } else {
+        showToast(json.error || 'Não foi possível extrair dados do comprovante. Tente uma foto mais nítida.');
+      }
+    } catch (err: any) {
+      console.error('OCR Error:', err);
+      showToast('Erro ao comunicar com a IA Gemini para leitura do comprovante.');
+    } finally {
+      setIsScanningFile(false);
+      setScanStepMessage('');
     }
   };
 
@@ -221,11 +590,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       showToast('Por favor, selecione uma imagem (JPG, PNG, WEBP) ou documento PDF.');
       return;
     }
-
-    setUploadedFileName(file.name);
-    setIsScanningFile(true);
-    setScanStepMessage(`Carregando "${file.name}"...`);
-    showToast(`Carregando "${file.name}"...`);
 
     const reader = new FileReader();
     reader.onerror = () => {
@@ -238,133 +602,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       const base64 = reader.result as string;
       setUploadedImage(base64);
       setLeftViewMode('photo');
-      setScanStepMessage('Gemini Vision OCR analisando cabeçalho, produtos e valores...');
-      showToast('IA examinando comprovante com visão computacional...');
-
-      try {
-        const response = await fetch('/api/scan-receipt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64,
-            mimeType: file.type || 'image/jpeg',
-          }),
-        });
-
-        const json = await response.json();
-        if (json.success && json.data) {
-          const d = json.data;
-          const mappedItems = (d.itens || []).map((it: any, idx: number) => {
-            const isRemedio =
-              (it.categoriaItem || '').toLowerCase().includes('reméd') ||
-              (it.categoriaItem || '').toLowerCase().includes('farm') ||
-              (it.subcategoriaSugerida || '').toLowerCase().includes('farm');
-            return {
-              id: it.id || `it-${Date.now()}-${idx}`,
-              nome: it.nome || 'Produto / Item',
-              codEan: it.codigoEan || '',
-              qtd: Number(it.quantidade) || 1,
-              unitario: Number(it.precoUnitario) || Number(it.precoTotal) || 0,
-              subtotal: Number(it.precoTotal) || 0,
-              categoria: it.categoriaItem || it.subcategoriaSugerida || 'Alimentos (Supermercado / Variável)',
-              icon: isRemedio ? 'pill' : 'utensils',
-              categoriaColor: isRemedio
-                ? 'bg-[#fee2e2] text-[#dc2626] border-[#fecdd3]'
-                : 'bg-[#ecfdf5] text-[#006948] border-[#a7f3d0]',
-              desmembrado: !!it.desmembrado,
-              aviso: it.motivoDesmembramento || undefined,
-            };
-          });
-
-          const totalCalculated =
-            Number(d.valorTotal) ||
-            mappedItems.reduce((sum: number, it: any) => sum + (it.subtotal || 0), 0);
-
-          const newReceiptId = `nfc-${Date.now()}`;
-          const rawDate = d.data && d.data !== 'Não identificado'
-            ? d.data
-            : new Date().toLocaleDateString('pt-BR');
-
-          const newReceiptModel = {
-            id: newReceiptId,
-            numeroCupom:
-              d.numeroCupom && d.numeroCupom !== 'Não identificado'
-                ? d.numeroCupom
-                : `NFC-e #${Math.floor(10000 + Math.random() * 90000)}`,
-            dataHora: rawDate,
-            estabelecimento:
-              d.estabelecimento && d.estabelecimento !== 'Não identificado'
-                ? d.estabelecimento
-                : 'Estabelecimento Identificado',
-            cnpj: d.cnpj && d.cnpj !== 'Não identificado' ? d.cnpj : '',
-            ie: d.ie || '',
-            endereco: d.endereco && d.endereco !== 'Não identificado' ? d.endereco : 'Teresina, PI',
-            ccf: d.ccf || '',
-            totalLido: totalCalculated,
-            meioPagamento:
-              d.formaPagamento && d.formaPagamento !== 'Não identificado'
-                ? d.formaPagamento
-                : 'Cartão NuBank Compartilhado',
-            comprador:
-              d.comprador && d.comprador !== 'Não identificado'
-                ? d.comprador
-                : 'Felipe Duarte & Genivânia Duarte',
-            itens: mappedItems,
-          };
-
-          setExtractedReceipt(newReceiptModel);
-          setIsApproved(false);
-          setApprovedMonth(null);
-
-          // Salvar rascunho imediatamente no Supabase para garantir persistência na nuvem!
-          if (onSaveReceiptDraft) {
-            const isFarm =
-              newReceiptModel.estabelecimento.toLowerCase().includes('farm') ||
-              newReceiptModel.estabelecimento.toLowerCase().includes('droga');
-            const isGas =
-              newReceiptModel.estabelecimento.toLowerCase().includes('posto') ||
-              newReceiptModel.estabelecimento.toLowerCase().includes('combust');
-
-            const draftObj: Receipt = {
-              id: newReceiptId,
-              data: rawDate,
-              estabelecimento: newReceiptModel.estabelecimento,
-              tipoEstabelecimento: isFarm ? 'Farmácia' : isGas ? 'Posto de combustível' : 'Supermercado',
-              numeroCupom: newReceiptModel.numeroCupom,
-              valorTotal: totalCalculated,
-              status: 'Pendente',
-              imagemUrl: base64,
-              itens: mappedItems.map((it) => ({
-                id: it.id,
-                nome: it.nome,
-                categoriaItem: it.categoria,
-                quantidade: it.qtd,
-                precoUnitario: it.unitario,
-                precoTotal: it.subtotal,
-                desmembrado: it.desmembrado,
-              })),
-            };
-
-            onSaveReceiptDraft(draftObj).then((saved) => {
-              if (saved) {
-                showToast(`✅ Comprovante "${d.estabelecimento}" lido com sucesso! Revise e aprove para lançar no Extrato.`);
-              } else {
-                showToast(`Comprovante lido com sucesso! ${mappedItems.length} itens extraídos.`);
-              }
-            });
-          } else {
-            showToast(`Comprovante "${d.estabelecimento}" lido com sucesso! ${mappedItems.length} itens extraídos.`);
-          }
-        } else {
-          showToast(json.error || 'Não foi possível extrair dados do comprovante. Tente uma foto mais nítida.');
-        }
-      } catch (err: any) {
-        console.error('OCR Error:', err);
-        showToast('Erro ao comunicar com a IA Gemini para leitura do comprovante.');
-      } finally {
-        setIsScanningFile(false);
-        setScanStepMessage('');
-      }
+      fetchOcrForBase64(base64, file.type || 'image/jpeg', file.name);
     };
 
     reader.readAsDataURL(file);
@@ -443,13 +681,31 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
   return (
     <div className="w-full font-sans animate-in fade-in duration-300">
-      {/* Hidden File Input */}
+      {/* 1. Input para Câmera Nativa (capture="environment") */}
       <input
         type="file"
-        ref={fileInputRef}
+        ref={cameraInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+      />
+
+      {/* 2. Input para Galeria / Arquivos / PDF (sem capture) */}
+      <input
+        type="file"
+        ref={galleryInputRef}
         onChange={handleFileUpload}
         accept="image/*,application/pdf"
-        capture="environment"
+        className="hidden"
+      />
+
+      {/* 3. Input para Upload de Foto com QR Code */}
+      <input
+        type="file"
+        ref={qrFileInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
         className="hidden"
       />
 
@@ -514,9 +770,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             </div>
           </div>
 
-          {/* Botão Principal Grande */}
+          {/* Botão 1: Tirar Foto do Cupom (Abre Câmera Nativa) */}
           <button
-            onClick={handleTriggerFileInput}
+            onClick={handleTriggerCamera}
             disabled={isScanningFile}
             className="w-full py-3.5 px-4 rounded-2xl bg-[#005a3c] hover:bg-[#00472f] text-white shadow-md flex items-center justify-center gap-3 cursor-pointer disabled:opacity-75 active:scale-98 transition-all"
           >
@@ -526,27 +782,27 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 {isScanningFile ? 'Processando Imagem...' : 'Tirar Foto do Cupom'}
               </span>
               <span className="block text-[10px] text-[#a7f3d0] truncate">
-                Auto-foco & corte automático com IA
+                Abre câmera com auto-foco & corte IA
               </span>
             </div>
           </button>
 
-          {/* Sub-Ações Rápidas */}
+          {/* Sub-Ações Rápidas: Botão 2 (Galeria) e Botão 3 (QR Code) */}
           <div className="grid grid-cols-2 gap-2 mt-2.5">
             <button
-              onClick={handleTriggerFileInput}
+              onClick={handleTriggerGallery}
               disabled={isScanningFile}
-              className="py-2 px-3 rounded-xl border border-[#cbd5e1] text-[11px] font-semibold text-[#0b1c30] bg-[#f8faff] hover:bg-[#eff4ff] flex items-center justify-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-3 rounded-xl border border-[#cbd5e1] text-[11px] font-semibold text-[#0b1c30] bg-[#f8faff] hover:bg-[#eff4ff] flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 transition-all"
             >
-              <FileText className="w-3.5 h-3.5 text-[#565e74]" />
+              <FileText className="w-3.5 h-3.5 text-[#006194]" />
               <span>Galeria / PDF</span>
             </button>
             <button
-              onClick={handleTriggerFileInput}
+              onClick={handleTriggerQrCode}
               disabled={isScanningFile}
-              className="py-2 px-3 rounded-xl border border-[#cbd5e1] text-[11px] font-semibold text-[#0b1c30] bg-[#f8faff] hover:bg-[#eff4ff] flex items-center justify-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-3 rounded-xl border border-[#cbd5e1] text-[11px] font-semibold text-[#0b1c30] bg-[#f8faff] hover:bg-[#eff4ff] flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 transition-all"
             >
-              <QrCode className="w-3.5 h-3.5 text-[#565e74]" />
+              <QrCode className="w-3.5 h-3.5 text-[#006948]" />
               <span>QR Code NFC-e</span>
             </button>
           </div>
@@ -1556,6 +1812,217 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             >
               Concluir Reclassificação
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Leitor QR Code NFC-e */}
+      {showQrModal && (
+        <div
+          id="modal-qrcode-backdrop"
+          onClick={() => {
+            stopQrCamera();
+            setShowQrModal(false);
+          }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div
+            id="modal-qrcode-card"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-md rounded-3xl p-5 border border-[#dce9ff] shadow-2xl relative max-h-[92vh] overflow-y-auto"
+          >
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#e6f4ea] flex items-center justify-center text-[#006948]">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-base text-[#0b1c30]">
+                    Leitor QR Code NFC-e
+                  </h4>
+                  <p className="text-[11px] text-gray-400">
+                    Nota Fiscal de Consumidor Eletrônica
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  stopQrCamera();
+                  setShowQrModal(false);
+                }}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Abas: Câmera vs Chave/Link */}
+            <div className="flex gap-2 p-1 bg-[#f0f4f9] rounded-xl mt-4">
+              <button
+                type="button"
+                onClick={() => setQrActiveTab('camera')}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  qrActiveTab === 'camera'
+                    ? 'bg-white text-[#006948] shadow-xs'
+                    : 'text-gray-500 hover:text-[#0b1c30]'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                Câmera ao Vivo
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  stopQrCamera();
+                  setQrActiveTab('manual');
+                }}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  qrActiveTab === 'manual'
+                    ? 'bg-white text-[#006948] shadow-xs'
+                    : 'text-gray-500 hover:text-[#0b1c30]'
+                }`}
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                Chave / Link SEFAZ
+              </button>
+            </div>
+
+            {/* Conteúdo Aba Câmera */}
+            {qrActiveTab === 'camera' && (
+              <div className="mt-4 space-y-3">
+                <div className="relative w-full aspect-square max-h-[320px] bg-black rounded-2xl overflow-hidden flex items-center justify-center border-2 border-[#006948]/30">
+                  <video
+                    ref={qrVideoRef}
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Mira / Retícula de Leitura */}
+                  <div className="absolute inset-8 border-2 border-[#006948] rounded-2xl pointer-events-none flex flex-col justify-between p-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                    <div className="flex justify-between">
+                      <div className="w-4 h-4 border-t-2 border-l-2 border-[#22c55e]"></div>
+                      <div className="w-4 h-4 border-t-2 border-r-2 border-[#22c55e]"></div>
+                    </div>
+                    <div className="w-full h-0.5 bg-[#22c55e] animate-pulse"></div>
+                    <div className="flex justify-between">
+                      <div className="w-4 h-4 border-b-2 border-l-2 border-[#22c55e]"></div>
+                      <div className="w-4 h-4 border-b-2 border-r-2 border-[#22c55e]"></div>
+                    </div>
+                  </div>
+
+                  {!isQrCameraActive && (
+                    <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center p-4 text-center">
+                      <VideoOff className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="text-xs text-white/80 max-w-[220px]">
+                        {qrCameraError || 'Iniciando câmera...'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={startQrCamera}
+                        className="mt-3 px-4 py-1.5 rounded-lg bg-[#006948] text-white text-xs font-semibold"
+                      >
+                        Tentar Novamente
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCaptureQrSnapshot}
+                    disabled={!isQrCameraActive}
+                    className="flex-1 py-2.5 rounded-xl bg-[#006948] hover:bg-[#005a3c] text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Capturar QR Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (qrFileInputRef.current) qrFileInputRef.current.click();
+                    }}
+                    className="px-3 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 flex items-center gap-1 transition"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Foto QR
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+                  Aponte para o QR Code impresso na parte inferior do cupom fiscal NFC-e.
+                </p>
+              </div>
+            )}
+
+            {/* Conteúdo Aba Manual / Chave SEFAZ */}
+            {qrActiveTab === 'manual' && (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-[#0b1c30] mb-1">
+                    Chave de Acesso (44 dígitos) ou URL do QR Code
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={qrInputText}
+                      onChange={(e) => setQrInputText(e.target.value)}
+                      placeholder="Ex: 3524 0300 0000 0000 0000 6500 1000 0000 0010 0000 0000 ou cole o link do QR Code da NFC-e"
+                      rows={4}
+                      className="w-full text-xs font-mono p-3 rounded-xl border border-gray-300 focus:border-[#006948] focus:ring-1 focus:ring-[#006948] outline-hidden resize-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) {
+                            setQrInputText(text);
+                            showToast('Texto colado da área de transferência!');
+                          }
+                        } catch {
+                          showToast('Não foi possível acessar a área de transferência.');
+                        }
+                      }}
+                      className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-[11px] font-semibold text-gray-700 flex items-center gap-1 transition"
+                    >
+                      <Copy className="w-3 h-3" />
+                      Colar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl p-3 text-[11px] text-[#166534] space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#006948]" />
+                    Como funciona a decodificação da NFC-e:
+                  </div>
+                  <p className="text-gray-600 leading-relaxed">
+                    A chave de 44 dígitos contém o Estado (UF), CNPJ do emissor, número da nota fiscal e data. O sistema extrai essas informações automaticamente para conciliação.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!qrInputText.trim() || isProcessingQr}
+                  onClick={() => handleProcessQrValue(qrInputText)}
+                  className="w-full py-2.5 rounded-xl bg-[#006948] hover:bg-[#005a3c] text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition"
+                >
+                  {isProcessingQr ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Decodificar NFC-e
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
