@@ -160,10 +160,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     // Incomes and Net Balance calculation
     const incomes = relevantTransactions.filter((t) => t.tipo === 'receita');
-    const totalReceitas = incomes.length > 0
-      ? incomes.reduce((acc, t) => acc + t.valor, 0)
-      : 18450; // Renda familiar de referência
-    const saldoLiquido = totalReceitas - totalGastos;
+    const totalReceitas = incomes.reduce((acc, t) => acc + t.valor, 0);
+    const saldoLiquido = totalReceitas > 0 ? totalReceitas - totalGastos : 0;
 
     return {
       totalGastos,
@@ -369,29 +367,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Hero Card: SALDO LÍQUIDO ACUMULADO */}
+        {/* Hero Card: TOTAL GASTO (REALIDADE) */}
         <div className="bg-white rounded-3xl p-5 border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)] mb-4">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-[#565e74] uppercase tracking-wider">
-              SALDO LÍQUIDO ACUMULADO
+              TOTAL GASTO (REALIDADE)
             </span>
             <span
               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-xs ${
-                metrics.saldoLiquido >= 0 ? 'bg-[#dcfce7] text-[#006948]' : 'bg-[#fee2e2] text-[#dc2626]'
+                metrics.saldoOrcamento >= 0 ? 'bg-[#dcfce7] text-[#006948]' : 'bg-[#fee2e2] text-[#dc2626]'
               }`}
             >
-              <TrendingUp className="w-3.5 h-3.5 stroke-[2.5]" />
-              {metrics.saldoLiquido >= 0 ? 'Superávit' : 'Déficit'}
+              {metrics.saldoOrcamento >= 0 ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                  Dentro do Teto
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
+                  Acima do Teto
+                </>
+              )}
             </span>
           </div>
 
           <div className="my-2">
             <span
               className={`font-display font-black text-3xl sm:text-4xl tracking-tight font-mono ${
-                metrics.saldoLiquido >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'
+                metrics.saldoOrcamento >= 0 ? 'text-[#0b1c30]' : 'text-[#ba1a1a]'
               }`}
             >
-              {metrics.saldoLiquido >= 0 ? '+' : ''}{formatBRL(metrics.saldoLiquido)}
+              {formatBRL(metrics.totalGastos)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-[#565e74] mb-3 pb-2 border-b border-[#f1f5f9]">
+            <span>
+              Teto Previsto: <strong className="text-[#0b1c30]">{formatBRL(metrics.expectativaPrevista)}</strong>
+            </span>
+            <span>
+              Saldo Restante: <strong className={metrics.saldoOrcamento >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'}>{formatBRL(metrics.saldoOrcamento)}</strong>
             </span>
           </div>
 
@@ -682,6 +698,51 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
                 <span className="text-[#727a90] text-[11px]">
                   Teto: {formatBRL(metrics.goalLazer)}
+                </span>
+              </div>
+            </div>
+
+            {/* Farmácia & Saúde */}
+            <div
+              onClick={() => onNavigateToTab('metas')}
+              className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-xs cursor-pointer active:scale-98 transition-transform"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#fdf2f8] text-[#db2777] flex items-center justify-center">
+                    <Pill className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs text-[#0b1c30] block">Farmácia & Saúde</span>
+                    <span className="text-[10px] text-[#565e74]">
+                      {metrics.gastoFarmacia > metrics.goalFarmacia
+                        ? `Excedido em ${formatBRL(metrics.gastoFarmacia - metrics.goalFarmacia)}`
+                        : `Restam ${formatBRL(metrics.goalFarmacia - metrics.gastoFarmacia)} livres`}
+                    </span>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  metrics.gastoFarmacia > metrics.goalFarmacia
+                    ? 'bg-[#fee2e2] text-[#dc2626]'
+                    : 'bg-[#ecfdf5] text-[#006948]'
+                }`}>
+                  {metrics.gastoFarmacia > metrics.goalFarmacia ? 'Atenção' : 'No Limite'}
+                </span>
+              </div>
+              <div className="w-full h-2 bg-[#f1f5f9] rounded-full overflow-hidden mt-3">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    metrics.gastoFarmacia > metrics.goalFarmacia ? 'bg-[#dc2626]' : 'bg-[#db2777]'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.round((metrics.gastoFarmacia / (metrics.goalFarmacia || 1)) * 100))}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs mt-2 font-mono">
+                <span className={`font-bold ${metrics.gastoFarmacia > metrics.goalFarmacia ? 'text-[#dc2626]' : 'text-[#0b1c30]'}`}>
+                  {formatBRL(metrics.gastoFarmacia)}
+                </span>
+                <span className="text-[#727a90] text-[11px]">
+                  Teto: {formatBRL(metrics.goalFarmacia)}
                 </span>
               </div>
             </div>

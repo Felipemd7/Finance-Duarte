@@ -401,10 +401,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     const credor = felipeGasto > genivaniaGasto ? 'Felipe' : 'Genivânia';
 
     const incomes = filteredTransactions.filter((t) => t.tipo === 'receita');
-    const totalEntradas = incomes.length > 0
-      ? incomes.reduce((acc, t) => acc + (Number(t.valor) || 0), 0)
-      : 18450;
-    const saldoLiquido = totalEntradas - totalGasto;
+    const totalEntradas = incomes.reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+    const saldoLiquido = totalEntradas > 0 ? totalEntradas - totalGasto : -totalGasto;
 
     return {
       totalGasto,
@@ -521,44 +519,55 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
               <div className="pt-3 pb-2">
                 <span className="text-[11px] font-bold text-[#565e74] uppercase tracking-wider block">
-                  Saldo Líquido do Casal
+                  {analyticsData.totalEntradas > 0 ? 'Saldo Líquido do Casal' : 'Total de Despesas Registradas'}
                 </span>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className={`font-display font-black text-3xl font-mono ${
-                    analyticsData.saldoLiquido >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'
+                    analyticsData.totalEntradas > 0
+                      ? analyticsData.saldoLiquido >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'
+                      : 'text-[#0b1c30]'
                   }`}>
-                    {analyticsData.saldoLiquido >= 0 ? '+' : ''}{formatBRL(analyticsData.saldoLiquido)}
+                    {analyticsData.totalEntradas > 0
+                      ? `${analyticsData.saldoLiquido >= 0 ? '+' : ''}${formatBRL(analyticsData.saldoLiquido)}`
+                      : formatBRL(analyticsData.totalGasto)}
                   </span>
-                  <TrendingUp className="w-4 h-4 text-[#006948]" />
+                  {analyticsData.totalEntradas > 0 && <TrendingUp className="w-4 h-4 text-[#006948]" />}
                 </div>
               </div>
 
-              {/* 2 Cartões Lado a Lado: Entradas e Saídas */}
-              <div className="grid grid-cols-2 gap-2.5 pt-2">
-                <div className="p-3 rounded-2xl bg-[#eff4ff] border border-[#dce9ff] flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-white text-[#006194] flex items-center justify-center shrink-0 shadow-2xs">
-                    <ArrowDown className="w-4 h-4" />
+              {/* Se houver entradas registradas, exibe comparação de Entradas x Saídas; senão exibe resumo de despesas */}
+              {analyticsData.totalEntradas > 0 ? (
+                <div className="grid grid-cols-2 gap-2.5 pt-2">
+                  <div className="p-3 rounded-2xl bg-[#eff4ff] border border-[#dce9ff] flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white text-[#006194] flex items-center justify-center shrink-0 shadow-2xs">
+                      <ArrowDown className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-[#565e74] font-medium block">Total Entradas</span>
+                      <span className="font-mono font-bold text-xs text-[#0b1c30] block truncate">
+                        {formatBRL(analyticsData.totalEntradas)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-[#565e74] font-medium block">Total Entradas</span>
-                    <span className="font-mono font-bold text-xs text-[#0b1c30] block truncate">
-                      {formatBRL(analyticsData.totalEntradas)}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="p-3 rounded-2xl bg-[#fff1f2] border border-[#fecdd3] flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-white text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
-                    <ArrowUp className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-[#565e74] font-medium block">Total Saídas</span>
-                    <span className="font-mono font-bold text-xs text-[#ba1a1a] block truncate">
-                      {formatBRL(analyticsData.totalGasto)}
-                    </span>
+                  <div className="p-3 rounded-2xl bg-[#fff1f2] border border-[#fecdd3] flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
+                      <ArrowUp className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-[#565e74] font-medium block">Total Saídas</span>
+                      <span className="font-mono font-bold text-xs text-[#ba1a1a] block truncate">
+                        {formatBRL(analyticsData.totalGasto)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs text-[#565e74] pt-2 pb-1 border-t border-[#f1f5f9] mt-1">
+                  <span>Total de {analyticsData.count} despesas no mês</span>
+                  <span className="font-semibold text-[#006194]">Média: {formatBRL(analyticsData.ticketMedio)}/compra</span>
+                </div>
+              )}
 
               {/* Divisão & Rateio Paritário */}
               <div className="mt-4 p-3.5 rounded-2xl bg-[#f8faff] border border-[#e5eeff]">
