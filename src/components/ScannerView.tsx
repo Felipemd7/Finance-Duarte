@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { Receipt, PurchaseItem } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { analyzeReceiptDirect } from '../services/clientOcrService';
 
 interface ScannerViewProps {
   receipts: Receipt[];
@@ -458,18 +459,35 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     showToast('IA examinando comprovante com visão computacional...');
 
     try {
-      const response = await fetch('/api/scan-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64,
-          mimeType: mimeType || 'image/jpeg',
-        }),
-      });
+      let d: any = null;
 
-      const json = await response.json();
-      if (json.success && json.data) {
-        const d = json.data;
+      try {
+        const response = await fetch('/api/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mimeType: mimeType || 'image/jpeg',
+          }),
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          if (json.success && json.data) {
+            d = json.data;
+          }
+        }
+      } catch (endpointErr) {
+        console.warn('[ScannerView] Endpoint indisponível, acionando fallback direto...', endpointErr);
+      }
+
+      // Fallback direto: se o endpoint da API não respondeu ou deu erro, usa cliente direto Gemini
+      if (!d) {
+        setScanStepMessage(`Conectando diretamente com IA Gemini (${fileName})...`);
+        d = await analyzeReceiptDirect(base64, mimeType);
+      }
+
+      if (d) {
         const mappedItems = (d.itens || []).map((it: any, idx: number) => {
           const isRemedio =
             (it.categoriaItem || '').toLowerCase().includes('reméd') ||
@@ -573,7 +591,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           showToast(`Comprovante "${d.estabelecimento}" lido com sucesso! ${mappedItems.length} itens extraídos.`);
         }
       } else {
-        showToast(json.error || 'Não foi possível extrair dados do comprovante. Tente uma foto mais nítida.');
+        showToast('Não foi possível extrair dados do comprovante. Tente uma foto mais nítida.');
       }
     } catch (err: any) {
       console.error('OCR Error:', err);

@@ -67,6 +67,11 @@ function aistudioMediaPlugin(): Plugin {
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss(), aistudioMediaPlugin()],
+    define: {
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(
+        process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || 'AIzaSyCoQOy42UyZYpT8idP-P69ki5XIQXYAgfg'
+      ),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -620,8 +620,8 @@ INSTRUÇÕES RIGOROSAS:
       }
     ];
 
-    // Candidate models with fallback order in case of temporary 503 high demand spikes
-    const candidateModels = ['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    // Candidate models with high availability in Google Gen AI
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.6-flash'];
     let parsedData: any = null;
     let modelUsed = '';
     let lastError: any = null;
@@ -834,7 +834,7 @@ Retorne APENAS um JSON estrito no seguinte formato:
   "endereco": "string"
 }`;
 
-    const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.6-flash'];
     let parsedData: any = null;
     let modelUsed = '';
     let lastError: any = null;

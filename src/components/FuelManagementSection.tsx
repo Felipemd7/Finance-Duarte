@@ -36,6 +36,7 @@ import {
 } from 'recharts';
 import { FuelLog } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { analyzeFuelReceiptDirect } from '../services/clientOcrService';
 
 interface FuelManagementSectionProps {
   fuelLogs: FuelLog[];
@@ -391,20 +392,40 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
         setScanStepMessage('Gemini extraindo posto, data, litros, preço e KM...');
       }
 
-      const res = await fetch('/api/scan-fuel-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      let d: any = null;
 
-      const json = await res.json();
+      try {
+        const res = await fetch('/api/scan-fuel-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-      if (json.success && json.data) {
-        const d = json.data;
-        setFormPosto(d.posto || 'Posto de Combustível');
-        setFormCombustivel(d.combustivel || 'Gasolina Comum');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            d = json.data;
+          }
+        }
+      } catch (endpointErr) {
+        console.warn('[FuelManagementSection] Endpoint indisponível, usando fallback direto...', endpointErr);
+      }
+
+      // Fallback direto via Gemini AI
+      if (!d && body.imageBase64) {
+        setScanStepMessage('Processando visão computacional diretamente com Gemini AI...');
+        try {
+          d = await analyzeFuelReceiptDirect(body.imageBase64, body.mimeType);
+        } catch (directErr) {
+          console.error('[FuelManagementSection] Fallback direto falhou:', directErr);
+        }
+      }
+
+      if (d) {
+        setFormPosto(d.postoNome || d.posto || 'Posto de Combustível');
+        setFormCombustivel(d.tipoCombustivel || d.combustivel || 'Gasolina Comum');
         if (d.valorTotal) setFormValorTotal(Number(d.valorTotal).toFixed(2));
-        if (d.precoLitro) setFormPrecoLitro(Number(d.precoLitro).toFixed(2));
+        if (d.precoPorLitro || d.precoLitro) setFormPrecoLitro(Number(d.precoPorLitro || d.precoLitro).toFixed(2));
         if (d.litros) setFormLitros(Number(d.litros).toFixed(2));
         if (d.data) setFormDate(d.data.slice(0, 10));
         if (d.km) setFormKmAtual(d.km.toString());
@@ -415,7 +436,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
         onShowToast('Comprovante lido com sucesso! Confira os dados antes de salvar.');
         setModalMethod('manual'); // Switch to form so user can review and adjust KM
       } else {
-        onShowToast(json.error || 'Não foi possível ler o comprovante. Preencha manualmente.');
+        onShowToast('Não foi possível ler o comprovante automaticamente. Preencha manualmente.');
       }
     } catch (err: any) {
       console.error('Scan fuel error:', err);

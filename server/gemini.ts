@@ -138,8 +138,7 @@ RETORNE EXCLUSIVAMENTE UM OBJETO JSON VÁLIDO. Sem comentários e sem blocos Mar
 
 const CANDIDATE_MODELS = [
   'gemini-2.5-flash',
-  'gemini-3.8-flash',
-  'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
 ];
 
 export async function analyzeReceiptWithGemini(
