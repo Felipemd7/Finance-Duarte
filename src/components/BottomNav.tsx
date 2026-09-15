@@ -54,15 +54,17 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <div className="grid grid-cols-4 gap-2 pt-3">
               <button
                 onClick={() => {
-                  onTabChange('relatorios');
+                  onTabChange('metas');
                   setShowMoreMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-[#f8f9ff] hover:bg-[#eff4ff] text-[#0b1c30] transition-colors"
+                className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-colors ${
+                  currentTab === 'metas' ? 'bg-[#ecfdf5] text-[#006948] font-bold' : 'bg-[#f8faff] hover:bg-[#eff4ff] text-[#0b1c30]'
+                }`}
               >
                 <div className="w-9 h-9 rounded-lg bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5" />
+                  <Flag className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-semibold text-center leading-tight">Relatórios</span>
+                <span className="text-[10px] font-semibold text-center leading-tight">Metas & Carro</span>
               </button>
 
               <button
@@ -70,7 +72,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   onTabChange('lista');
                   setShowMoreMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-[#f8f9ff] hover:bg-[#eff4ff] text-[#0b1c30] transition-colors"
+                className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-colors ${
+                  currentTab === 'lista' ? 'bg-[#dae2fd] text-[#006194] font-bold' : 'bg-[#f8faff] hover:bg-[#eff4ff] text-[#0b1c30]'
+                }`}
               >
                 <div className="w-9 h-9 rounded-lg bg-[#dae2fd] text-[#006194] flex items-center justify-center">
                   <ShoppingCart className="w-5 h-5" />
@@ -80,28 +84,32 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
               <button
                 onClick={() => {
-                  onTabChange('planilhas');
+                  onTabChange('relatorios');
                   setShowMoreMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-[#f8f9ff] hover:bg-[#eff4ff] text-[#0b1c30] transition-colors"
+                className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-colors ${
+                  currentTab === 'relatorios' ? 'bg-[#ecfdf5] text-[#006948] font-bold' : 'bg-[#f8faff] hover:bg-[#eff4ff] text-[#0b1c30]'
+                }`}
               >
-                <div className="w-9 h-9 rounded-lg bg-[#e5eeff] text-[#006948] flex items-center justify-center">
-                  <FileSpreadsheet className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-semibold text-center leading-tight">Planilhas</span>
+                <span className="text-[10px] font-semibold text-center leading-tight">Relatórios BI</span>
               </button>
 
               <button
                 onClick={() => {
-                  onTabChange('voz');
+                  onTabChange('scanner');
                   setShowMoreMenu(false);
                 }}
-                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl bg-[#f8f9ff] hover:bg-[#eff4ff] text-[#0b1c30] transition-colors"
+                className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-colors ${
+                  currentTab === 'scanner' ? 'bg-[#eff4ff] text-[#006194] font-bold' : 'bg-[#f8faff] hover:bg-[#eff4ff] text-[#0b1c30]'
+                }`}
               >
-                <div className="w-9 h-9 rounded-lg bg-[#dae2fd] text-[#565e74] flex items-center justify-center">
-                  <Mic className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-[#eff4ff] text-[#006194] flex items-center justify-center">
+                  <ScanLine className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-semibold text-center leading-tight">Alexa / Siri</span>
+                <span className="text-[10px] font-semibold text-center leading-tight">Comprovantes</span>
               </button>
             </div>
           </div>
@@ -173,7 +181,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             id="mobile-tab-metas"
             onClick={() => onTabChange('metas')}
             className={`flex flex-col items-center justify-center min-w-[56px] min-h-[44px] transition-colors cursor-pointer ${
-              currentTab === 'metas'
+              currentTab === 'metas' || currentTab === 'lista'
                 ? 'text-[#006948] font-bold'
                 : 'text-[#565e74] hover:text-[#0b1c30]'
             }`}

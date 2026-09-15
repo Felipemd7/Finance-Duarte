@@ -7,7 +7,6 @@ import { TransactionsView } from './components/TransactionsView';
 import { GoalsView } from './components/GoalsView';
 import { ShoppingListView } from './components/ShoppingListView';
 import { MarketAnalyticsReportsView } from './components/MarketAnalyticsReportsView';
-import { SpreadsheetImportView } from './components/SpreadsheetImportView';
 import { VoiceApiView } from './components/VoiceApiView';
 import { NewTransactionModal } from './components/NewTransactionModal';
 
@@ -26,6 +25,8 @@ import {
   updateFuelLogInCloud,
   deleteFuelLogFromCloud,
   saveScannedReceiptToCloud,
+  saveScannedReceiptDraftToCloud,
+  deleteReceiptFromCloud,
 } from './services/supabaseService';
 
 export default function App() {
@@ -33,10 +34,10 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [selectedMonth, setSelectedMonth] = useState<string>('Março 2026');
   const [activeUser, setActiveUser] = useState<string>('casal');
+  const [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null);
 
   // Supabase sync state
   const [isSupabaseSynced, setIsSupabaseSynced] = useState<boolean>(false);
-  const [syncStatusText, setSyncStatusText] = useState<string>('Conectando ao Supabase...');
 
   // Core Data State
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
@@ -92,10 +93,8 @@ export default function App() {
         if (cloudData.goals.length > 0) setGoals(cloudData.goals);
         if (cloudData.spreadsheets.length > 0) setSpreadsheets(cloudData.spreadsheets);
         if (cloudData.fuelLogs && cloudData.fuelLogs.length > 0) setFuelLogs(cloudData.fuelLogs);
+        if (cloudData.receipts && cloudData.receipts.length > 0) setReceipts(cloudData.receipts);
         setIsSupabaseSynced(true);
-        setSyncStatusText(`🟢 Supabase Conectado • ${cloudData.transactions.length} transações de Felipe & Genivânia sincronizadas`);
-      } else {
-        setSyncStatusText('Dados locais ativos (Supabase offline)');
       }
     }
     loadCloudData();
@@ -139,17 +138,65 @@ export default function App() {
   };
 
   // Handler: Approve and reconcile receipt
-  const handleApproveReceipt = (receipt: Receipt) => {
-    // 1. Mark receipt as Conciliado
-    const updatedReceipts = receipts.map((r) =>
-      r.id === receipt.id ? { ...r, status: 'Conciliado' as const } : r
-    );
-    setReceipts(updatedReceipts);
+  const handleApproveReceipt = async (receipt: Receipt): Promise<boolean> => {
+    // 1. Normaliza data que pode vir em formato BR (dd/mm/yyyy) ou ISO (yyyy-mm-dd)
+    const normalizeReceiptDate = (d: string): string => {
+      if (!d) return new Date().toISOString().split('T')[0];
+      if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
+      if (/^\d{2}\/\d{2}\/\d{4}/.test(d)) {
+        const [day, month, year] = d.split('/');
+        return `${year}-${month}-${day.slice(0, 2)}`;
+      }
+      return new Date().toISOString().split('T')[0];
+    };
+    const txDate = normalizeReceiptDate(receipt.data);
 
-    // 2. Create new transaction in extrato
+    // Identificar o nome do mês da transação (ex: '2026-09' -> 'Setembro 2026')
+    const mesNomeMap: Record<string, string> = {
+      '01': 'Janeiro 2026',
+      '02': 'Fevereiro 2026',
+      '03': 'Março 2026',
+      '04': 'Abril 2026',
+      '05': 'Maio 2026',
+      '06': 'Junho 2026',
+      '07': 'Julho 2026',
+      '08': 'Agosto 2026',
+      '09': 'Setembro 2026',
+      '10': 'Outubro 2026',
+      '11': 'Novembro 2026',
+      '12': 'Dezembro 2026',
+    };
+    const parts = txDate.split('-');
+    const targetMes = (parts.length >= 2 && mesNomeMap[parts[1]]) ? mesNomeMap[parts[1]] : selectedMonth;
+
+    // Atualiza automaticamente o mês ativo para o mês do comprovante para ficar visível imediatamente no extrato!
+    setSelectedMonth(targetMes);
+
+    // 2. Mark receipt as Conciliado e garantir presença na lista
+    const approvedReceiptObj: Receipt = {
+      ...receipt,
+      data: txDate,
+      status: 'Conciliado' as const,
+    };
+
+    setReceipts((prev) => {
+      const exists = prev.some((r) => r.id === receipt.id);
+      if (exists) {
+        return prev.map((r) => (r.id === receipt.id ? approvedReceiptObj : r));
+      }
+      return [approvedReceiptObj, ...prev];
+    });
+
+    // 3. Create new transaction in extrato
+    const txId = receipt.transacaoId || ('tx-rec-' + Date.now());
+    const formaPgtoResolved = receipt.formaPagamento || 'Cartão de Crédito Compartilhado';
+    const isCredit = formaPgtoResolved.toLowerCase().includes('credito') ||
+                     formaPgtoResolved.toLowerCase().includes('crédito') ||
+                     (formaPgtoResolved.toLowerCase().includes('cartao') && !formaPgtoResolved.toLowerCase().includes('debito'));
+
     const newTx: Transaction = {
-      id: 'tx-rec-' + Date.now(),
-      data: receipt.data.split(' ')[0] || new Date().toISOString().split('T')[0],
+      id: txId,
+      data: txDate,
       tipo: 'despesa',
       categoria: 'Variável',
       subcategoria:
@@ -160,26 +207,31 @@ export default function App() {
           : 'Supermercado',
       estabelecimento: receipt.estabelecimento,
       valor: receipt.valorTotal,
-      formaPagamento: 'Cartão de Crédito NuBank',
-      status: 'pago',
-      pagoPor: 'Conta Conjunta Casal',
+      formaPagamento: formaPgtoResolved,
+      status: isCredit ? 'pendente' : 'pago',
+      pagoPor: receipt.pagoPor || 'Felipe Duarte',
       comprovanteId: receipt.id,
       itensDetalhados: receipt.itens,
-      observacoes: `Leitura automática ${receipt.numeroCupom} • NuBank Compartilhado`,
+      observacoes: `Leitura automática ${receipt.numeroCupom || ''} • ${formaPgtoResolved}`,
     };
 
-    setTransactions((prev) => [newTx, ...prev]);
-
-    // Salvar na nuvem Supabase em segundo plano
-    saveScannedReceiptToCloud(receipt, newTx).then((ok) => {
-      if (ok) console.log('[App] Comprovante e transação salvos no Supabase com sucesso.');
+    setTransactions((prev) => {
+      const exists = prev.some((t) => t.id === txId);
+      if (exists) return prev.map((t) => (t.id === txId ? newTx : t));
+      return [newTx, ...prev];
     });
 
-    // 3. Update spreadsheet reality row for active month
+    // Salvar na nuvem Supabase com await e retorno booleano
+    const ok = await saveScannedReceiptToCloud(approvedReceiptObj, newTx);
+    if (ok) {
+      console.log('[App] Comprovante e transação salvos no Supabase com sucesso:', newTx.id);
+    }
+
+    // 4. Update spreadsheet reality row for target month
     setSpreadsheets((prev) => {
       const matchIdx = prev.findIndex(
         (row) =>
-          row.mes === selectedMonth &&
+          row.mes === targetMes &&
           row.descricao.toLowerCase().includes(receipt.tipoEstabelecimento.toLowerCase().substring(0, 4))
       );
       if (matchIdx !== -1) {
@@ -195,6 +247,17 @@ export default function App() {
       }
       return prev;
     });
+
+    return ok;
+  };
+
+  const handleDeleteReceipt = async (receiptId: string) => {
+    const recToDelete = receipts.find((r) => r.id === receiptId);
+    setReceipts((prev) => prev.filter((r) => r.id !== receiptId));
+    if (recToDelete?.transacaoId) {
+      setTransactions((prev) => prev.filter((t) => t.id !== recToDelete.transacaoId));
+    }
+    await deleteReceiptFromCloud(receiptId, recToDelete?.transacaoId);
   };
 
   const handleAddTransaction = (newTx: Transaction) => {
@@ -232,6 +295,7 @@ export default function App() {
   };
 
   const handleViewReceipt = (receipt: Receipt) => {
+    setViewingReceipt(receipt);
     setCurrentTab('scanner');
   };
 
@@ -249,26 +313,22 @@ export default function App() {
         onOpenNewTx={() => setIsNewTxModalOpen(true)}
       />
 
-      {/* Supabase Sync Banner */}
-      <div className="bg-[#f0fdf4] border-b border-[#bbf7d0] py-1.5 px-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-[#166534]">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${isSupabaseSynced ? 'bg-[#16a34a] animate-pulse' : 'bg-[#eab308]'}`} />
-            <span className="font-medium text-xs">{syncStatusText}</span>
-          </div>
-          <span className="text-[11px] text-[#15803d] font-semibold hidden sm:inline">
-            Felipe Duarte & Genivânia Duarte
-          </span>
-        </div>
-      </div>
 
       {/* Main Viewport Container */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {currentTab === 'scanner' && (
           <ScannerView
             receipts={receipts}
+            initialReceiptToView={viewingReceipt}
             onApproveReceipt={handleApproveReceipt}
             onLinkToTransaction={handleApproveReceipt}
+            onDeleteReceipt={handleDeleteReceipt}
+            onSaveReceiptDraft={saveScannedReceiptDraftToCloud}
+            onNavigateToExtrato={(mes?: string) => {
+              if (mes) setSelectedMonth(mes);
+              setCurrentTab('extrato');
+            }}
+            selectedMonth={selectedMonth}
           />
         )}
 
@@ -288,6 +348,8 @@ export default function App() {
             transactions={transactions}
             receipts={receipts}
             selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
+            spreadsheets={spreadsheets}
             onOpenNewTx={() => setIsNewTxModalOpen(true)}
             onUpdateTransaction={handleUpdateTransaction}
             onDeleteTransaction={handleDeleteTransaction}
@@ -310,23 +372,21 @@ export default function App() {
         )}
 
         {currentTab === 'lista' && (
-          <ShoppingListView receipts={receipts} />
+          <ShoppingListView
+            receipts={receipts}
+            transactions={transactions}
+            onNavigateTab={setCurrentTab}
+            onSaveReceiptDraft={saveScannedReceiptDraftToCloud}
+          />
         )}
 
         {currentTab === 'relatorios' && (
-          <MarketAnalyticsReportsView onNavigateTab={setCurrentTab} />
-        )}
-
-        {currentTab === 'planilhas' && (
-          <SpreadsheetImportView
-            spreadsheets={spreadsheets}
+          <MarketAnalyticsReportsView
+            transactions={transactions}
+            receipts={receipts}
+            goals={goals}
             selectedMonth={selectedMonth}
-            onUpdateRow={(row) =>
-              setSpreadsheets((prev) => prev.map((r) => (r.id === row.id ? row : r)))
-            }
-            onAddRow={handleAddSpreadsheetRow}
-            onDeleteRow={handleDeleteSpreadsheetRow}
-            onImportRows={handleImportSpreadsheetRows}
+            onNavigateTab={setCurrentTab}
           />
         )}
 

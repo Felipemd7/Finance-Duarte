@@ -1,43 +1,55 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ShoppingCart,
-  Receipt,
+  Receipt as ReceiptIcon,
   FileText,
   Mic,
+  MicOff,
   Sparkles,
   Check,
   CheckCircle2,
   AlertTriangle,
-  Clock,
   Store,
   Pill,
   ShoppingBag,
   Package,
   ChevronDown,
   ChevronUp,
-  Wine,
-  Cookie,
-  Lightbulb,
   Plus,
   Radio,
   X,
   RefreshCw,
   ListFilter,
   CheckCheck,
+  Share2,
+  Trash2,
+  ExternalLink,
+  Search,
+  SlidersHorizontal,
+  ArrowRight,
+  TrendingDown,
+  TrendingUp,
+  DollarSign,
+  Info,
 } from 'lucide-react';
 import { formatBRL } from '../utils/formatters';
 import {
   fetchShoppingListFromCloud,
   addShoppingItemToCloud,
   toggleShoppingItemInCloud,
+  batchToggleShoppingItemsInCloud,
   deleteShoppingItemInCloud,
 } from '../services/supabaseService';
+import { Receipt, Transaction } from '../types';
 
 interface ShoppingListViewProps {
-  receipts?: any[];
+  receipts?: Receipt[];
+  transactions?: Transaction[];
+  onNavigateTab?: (tab: string) => void;
+  onSaveReceiptDraft?: (receipt: Receipt) => Promise<boolean> | void;
 }
 
-interface Item {
+export interface ShoppingItemUI {
   id: string;
   nome: string;
   quantidade: string;
@@ -47,208 +59,273 @@ interface Item {
   preco: number;
   subinfo: string;
   comprado: boolean;
-  naoFaturado?: boolean;
+  adicionadoPor: 'Felipe' | 'Genivânia';
+  estabelecimentoTipo?: string;
+  estabelecimentoNome?: string;
 }
 
-export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
-  // Active establishment selector
-  const [activeEstablishment, setActiveEstablishment] = useState<
-    'atacadao' | 'drogasil' | 'sams' | 'mercadolivre'
-  >('atacadao');
+// Helper: Text normalization for fuzzy matching
+function normalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  // Quick filter
-  const [activeFilter, setActiveFilter] = useState<
-    'todos' | 'essenciais' | 'conforto' | 'pendentes' | 'comprados'
-  >('todos');
+// Clean stop-words & measurement tokens
+const STOP_WORDS = new Set([
+  'de', 'da', 'do', 'das', 'dos', 'em', 'com', 'sem', 'para', 'tipo',
+  'un', 'und', 'unidade', 'unidades', 'kg', 'g', 'gr', 'gramas', 'kilo', 'quilo',
+  'l', 'lt', 'litro', 'litros', 'ml', 'pct', 'pcte', 'pacote', 'pacotes',
+  'cx', 'caixa', 'caixas', 'lata', 'latas', 'garrafa', 'garrafas', 'bd', 'bandeja'
+]);
 
-  // Category dropdown for new item
-  const [newCategory, setNewCategory] = useState('Alimentos');
-  const [newItemInput, setNewItemInput] = useState('');
+function tokenize(text: string): string[] {
+  return normalizeText(text)
+    .split(' ')
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+}
 
-  // Voice recording state / simulation
-  const [isListening, setIsListening] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+// Semantic matching between list item and receipt item
+function matchListItemToReceipt(shoppingName: string, receiptItems: any[]): { item: any; score: number } | null {
+  const normShop = normalizeText(shoppingName);
+  const shopTokens = tokenize(shoppingName);
+  if (shopTokens.length === 0 && normShop.length === 0) return null;
 
-  // Accordion details
-  const [showMoreItems, setShowMoreItems] = useState(false);
+  let bestMatch: any = null;
+  let bestScore = 0;
 
-  // Category sort state
-  const [isSortedByCategory, setIsSortedByCategory] = useState(false);
+  for (const rItem of receiptItems) {
+    const rawName = rItem.nome || rItem.nome_do_item || rItem.descricao || rItem.descricao_item || '';
+    const normReceipt = normalizeText(rawName);
+    const receiptTokens = tokenize(rawName);
 
-  // Reconciliation approval state
-  const [reconciliationApproved, setReconciliationApproved] = useState(false);
+    // 1. Direct substring match
+    if (normReceipt.includes(normShop) || (normShop.length >= 4 && normReceipt.includes(normShop))) {
+      return { item: rItem, score: 1.0 };
+    }
 
-  // Modal for All Reconciliations
-  const [showAllReconciliationsModal, setShowAllReconciliationsModal] = useState(false);
-
-  // Trigger Toast helper
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  // Main items list from Supabase
-  const [items, setItems] = useState<Item[]>([
-    {
-      id: 'shop-1',
-      nome: 'Arroz Integral 5kg',
-      quantidade: '2 pacotes',
-      origem: 'Felipe via Alexa',
-      categoria: 'Alimentos',
-      classificacao: 'Invariável (Essencial)',
-      preco: 58.0,
-      subinfo: 'Est. R$ 58,00',
-      comprado: false,
-    },
-    {
-      id: 'shop-2',
-      nome: 'Azeite de Oliva Extra Virgem',
-      quantidade: '1 garrafa',
-      origem: 'Genivânia via Alexa',
-      categoria: 'Alimentos',
-      classificacao: 'Invariável (Essencial)',
-      preco: 45.0,
-      subinfo: 'Est. R$ 45,00',
-      comprado: false,
-    },
-    {
-      id: 'shop-3',
-      nome: 'Detergente e Sabão Omo Líquido 3L',
-      quantidade: '1 galão',
-      origem: 'Genivânia via Siri',
-      categoria: 'Limpeza',
-      classificacao: 'Invariável (Essencial)',
-      preco: 40.0,
-      subinfo: 'Est. R$ 40,00',
-      comprado: false,
-    },
-    {
-      id: 'shop-4',
-      nome: 'Café em Grãos Especial 500g',
-      quantidade: '2 pacotes',
-      origem: 'Felipe via Siri',
-      categoria: 'Alimentos',
-      classificacao: 'Conforto / Gourmet',
-      preco: 38.0,
-      subinfo: 'Est. R$ 38,00',
-      comprado: false,
-    },
-    {
-      id: 'shop-5',
-      nome: 'Vitamina C efervescente',
-      quantidade: '2 caixas',
-      origem: 'Genivânia via Alexa',
-      categoria: 'Remédio',
-      classificacao: 'Invariável (Essencial)',
-      preco: 70.0,
-      subinfo: 'Est. R$ 70,00',
-      comprado: false,
-    },
-  ]);
-
-  // Load from Supabase on Mount
-  useEffect(() => {
-    async function loadCloudList() {
-      const cloud = await fetchShoppingListFromCloud();
-      if (cloud && cloud.length > 0) {
-        setItems(
-          cloud.map((s) => ({
-            id: s.id,
-            nome: s.nome,
-            quantidade: s.quantidade || '1 un',
-            origem: s.origem === 'alexa' ? `${s.adicionadoPor} via Alexa` : s.origem === 'siri' ? `${s.adicionadoPor} via Siri` : `${s.adicionadoPor} (manual)`,
-            categoria: s.categoriaItem || 'Alimentos',
-            classificacao: s.categoriaItem === 'Limpeza' || s.categoriaItem === 'Alimentos' ? 'Invariável (Essencial)' : 'Conforto / Rotina',
-            preco: s.precoEstimado || 0,
-            subinfo: s.precoEstimado ? `Est. ${formatBRL(s.precoEstimado)}` : 'Item da despensa',
-            comprado: Boolean(s.comprado),
-          }))
-        );
+    // 2. Token overlap score
+    if (shopTokens.length > 0) {
+      let matchedCount = 0;
+      for (const t of shopTokens) {
+        if (normReceipt.includes(t) || receiptTokens.some((rt) => rt.includes(t) || t.includes(rt))) {
+          matchedCount++;
+        }
+      }
+      const score = matchedCount / shopTokens.length;
+      if (score >= 0.5 && score > bestScore) {
+        bestScore = score;
+        bestMatch = rItem;
       }
     }
-    loadCloudList();
+  }
+
+  return bestScore >= 0.5 ? { item: bestMatch, score: bestScore } : null;
+}
+
+export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
+  receipts = [],
+  transactions = [],
+  onNavigateTab,
+}) => {
+  // 1. List Items State
+  const [items, setItems] = useState<ShoppingItemUI[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 2. Form Inputs
+  const [newItemInput, setNewItemInput] = useState('');
+  const [newQuantityInput, setNewQuantityInput] = useState('1 un');
+  const [newCategory, setNewCategory] = useState('Alimentos');
+  const [newPriceInput, setNewPriceInput] = useState('');
+  const [userAuthor, setUserAuthor] = useState<'Felipe' | 'Genivânia'>('Felipe');
+
+  // 3. Filters & Search
+  const [activeStatusFilter, setActiveStatusFilter] = useState<'todos' | 'pendentes' | 'comprados'>('pendentes');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('todas');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSortedByCategory, setIsSortedByCategory] = useState(false);
+
+  // 4. Voice Recognition (Real Web Speech API + simulation fallback)
+  const [isListening, setIsListening] = useState(false);
+  const speechRecognitionRef = useRef<any>(null);
+
+  // 5. Toast Feedback
+  const [toastMessage, setToastMessage] = useState<{ text: string; type?: 'success' | 'info' | 'warn' } | null>(null);
+
+  // 6. Selected Receipt for Reconciliation
+  const [selectedReceiptId, setSelectedReceiptId] = useState<string>('');
+  const [reconciliationApproved, setReconciliationApproved] = useState(false);
+
+  const triggerToast = (text: string, type: 'success' | 'info' | 'warn' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => setToastMessage(null), 3800);
+  };
+
+  // Load Shopping List from Supabase on Mount
+  const loadList = async () => {
+    setIsLoading(true);
+    const cloud = await fetchShoppingListFromCloud();
+    if (cloud && cloud.length > 0) {
+      setItems(
+        cloud.map((s) => ({
+          id: s.id,
+          nome: s.nome || 'Item sem nome',
+          quantidade: s.quantidade || '1 un',
+          origem: s.origem === 'alexa' ? `${s.adicionadoPor} via Alexa` : s.origem === 'siri' ? `${s.adicionadoPor} via Siri` : `${s.adicionadoPor} (manual)`,
+          categoria: s.categoriaItem || 'Alimentos',
+          classificacao: s.categoriaItem === 'Limpeza' || s.categoriaItem === 'Alimentos' ? 'Invariável (Essencial)' : 'Conforto / Rotina',
+          preco: s.precoEstimado || 0,
+          subinfo: s.precoEstimado ? `Est. ${formatBRL(s.precoEstimado)}` : 'Planejado',
+          comprado: Boolean(s.comprado),
+          adicionadoPor: (s.adicionadoPor as any) === 'Genivânia' ? 'Genivânia' : 'Felipe',
+          estabelecimentoTipo: s.estabelecimentoTipo,
+          estabelecimentoNome: s.estabelecimentoNome,
+        }))
+      );
+    } else {
+      setItems([]);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadList();
   }, []);
 
-  // Additional 7 planned items inside accordion
-  const extraItems: Item[] = [
-    {
-      id: 'item-extra-1',
-      nome: 'Arroz Branco Tipo 1 5kg',
-      quantidade: '1 pct',
-      origem: 'Felipe via App',
-      categoria: 'Alimento',
-      classificacao: 'Invariável (Essencial)',
-      preco: 29.9,
-      subinfo: 'R$ 29,90 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-extra-2',
-      nome: 'Feijão Carioca Especial 1kg',
-      quantidade: '2 pct',
-      origem: 'Genivânia via App',
-      categoria: 'Alimento',
-      classificacao: 'Invariável (Essencial)',
-      preco: 17.8,
-      subinfo: 'R$ 8,90 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-extra-3',
-      nome: 'Leite Integral UHT 1L',
-      quantidade: '12 un',
-      origem: 'Felipe via App',
-      categoria: 'Alimento',
-      classificacao: 'Invariável (Essencial)',
-      preco: 58.8,
-      subinfo: 'R$ 4,90 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-extra-4',
-      nome: 'Ovos Vermelhos Grandes 30un',
-      quantidade: '1 bandeja',
-      origem: 'Genivânia via App',
-      categoria: 'Alimento',
-      classificacao: 'Invariável (Essencial)',
-      preco: 22.9,
-      subinfo: 'R$ 22,90 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-extra-5',
-      nome: 'Sabão em Pó Ação Total 2,4kg',
-      quantidade: '1 cx',
-      origem: 'Felipe via App',
-      categoria: 'Limpeza',
-      classificacao: 'Invariável (Essencial)',
-      preco: 31.9,
-      subinfo: 'R$ 31,90 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-extra-6',
-      nome: 'Desinfetante Floral 2L',
-      quantidade: '1 frasco',
-      origem: 'Genivânia via App',
-      categoria: 'Limpeza',
-      classificacao: 'Invariável (Essencial)',
-      preco: 14.5,
-      subinfo: 'R$ 14,50 / un',
-      comprado: true,
-    },
-    {
-      id: 'item-extra-7',
-      nome: 'Esponja Multiuso Pacote c/ 4',
-      quantidade: '1 pct',
-      origem: 'Felipe via App',
-      categoria: 'Limpeza',
-      classificacao: 'Invariável (Essencial)',
-      preco: 6.9,
-      subinfo: 'R$ 6,90 / un',
-      comprado: true,
-    },
-  ];
+  // Filter available supermarket receipts with items
+  const availableSupermarketReceipts = useMemo(() => {
+    return receipts.filter((r) => {
+      const isSuper = (r.tipoEstabelecimento || '').toLowerCase().includes('super') ||
+        (r.estabelecimento || '').toLowerCase().includes('mateus') ||
+        (r.estabelecimento || '').toLowerCase().includes('atacadao') ||
+        (r.estabelecimento || '').toLowerCase().includes('carvalho') ||
+        (r.estabelecimento || '').toLowerCase().includes('frigorifico') ||
+        (r.estabelecimento || '').toLowerCase().includes('ferreira');
+      return isSuper || (r.itens && r.itens.length > 0);
+    });
+  }, [receipts]);
+
+  // Set default selected receipt to the most recent one with items
+  useEffect(() => {
+    if (!selectedReceiptId && availableSupermarketReceipts.length > 0) {
+      setSelectedReceiptId(availableSupermarketReceipts[0].id);
+    }
+  }, [availableSupermarketReceipts, selectedReceiptId]);
+
+  const activeReceipt = useMemo(() => {
+    return availableSupermarketReceipts.find((r) => r.id === selectedReceiptId) || availableSupermarketReceipts[0] || null;
+  }, [availableSupermarketReceipts, selectedReceiptId]);
+
+  // Reconciliation / Comparison Algorithm: List Items vs Active Receipt
+  const reconciliationAudit = useMemo(() => {
+    if (!activeReceipt || !activeReceipt.itens || activeReceipt.itens.length === 0) {
+      return null;
+    }
+
+    const receiptItems = activeReceipt.itens;
+    const pairedReceiptItemIds = new Set<string>();
+
+    // Analyze list items
+    const matchedListItems: {
+      listItem: ShoppingItemUI;
+      receiptItem: any;
+      precoReal: number;
+      precoEstimado: number;
+      economia: number;
+    }[] = [];
+
+    const missingListItems: ShoppingItemUI[] = [];
+
+    items.forEach((it) => {
+      const match = matchListItemToReceipt(it.nome, receiptItems);
+      if (match) {
+        const rItem = match.item;
+        const itemId = rItem.id || rItem.nome || rItem.descricao;
+        pairedReceiptItemIds.add(itemId);
+
+        const precoReal = Number(rItem.precoTotal || rItem.preco_total || rItem.valorTotal || rItem.precoUnitario || 0);
+        const precoEstimado = it.preco || 0;
+        const economia = precoEstimado > 0 ? precoEstimado - precoReal : 0;
+
+        matchedListItems.push({
+          listItem: it,
+          receiptItem: rItem,
+          precoReal,
+          precoEstimado,
+          economia,
+        });
+      } else {
+        // Not found in this receipt
+        missingListItems.push(it);
+      }
+    });
+
+    // Unmatched receipt items -> Extras / Impulso
+    const extraReceiptItems = receiptItems.filter((r) => {
+      const id = r.id || r.nome || r.descricao;
+      return !pairedReceiptItemIds.has(id);
+    });
+
+    const totalReceiptVal = Number(activeReceipt.valorTotal) || receiptItems.reduce((acc, i) => acc + Number(i.precoTotal || i.preco_total || 0), 0);
+    const totalMatchedVal = matchedListItems.reduce((acc, m) => acc + m.precoReal, 0);
+    const totalExtraVal = extraReceiptItems.reduce((acc, i) => acc + Number(i.precoTotal || i.preco_total || 0), 0);
+
+    const totalPlannedEvaluated = items.length;
+    const adherenceRate = totalPlannedEvaluated > 0 ? Math.round((matchedListItems.length / totalPlannedEvaluated) * 100) : 0;
+
+    return {
+      receipt: activeReceipt,
+      matchedListItems,
+      missingListItems,
+      extraReceiptItems,
+      totalReceiptVal,
+      totalMatchedVal,
+      totalExtraVal,
+      adherenceRate,
+    };
+  }, [items, activeReceipt]);
+
+  // Insert Item
+  const handleInsertItem = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newItemInput.trim()) return;
+
+    const nome = newItemInput.trim();
+    const quantidade = newQuantityInput.trim() || '1 un';
+    const precoEstimado = parseFloat(newPriceInput.replace(',', '.')) || 0;
+
+    const cloudItem = await addShoppingItemToCloud({
+      nome,
+      quantidade,
+      categoriaItem: newCategory,
+      adicionadoPor: userAuthor,
+      origem: 'manual',
+      precoEstimado: precoEstimado > 0 ? precoEstimado : undefined,
+    });
+
+    const newItem: ShoppingItemUI = {
+      id: cloudItem?.id || ('item-' + Date.now()),
+      nome,
+      quantidade,
+      origem: `${userAuthor} (manual)`,
+      categoria: newCategory,
+      classificacao: newCategory === 'Conforto/Lazer' ? 'Conforto / Rotina' : 'Invariável (Essencial)',
+      preco: precoEstimado,
+      subinfo: precoEstimado > 0 ? `Est. ${formatBRL(precoEstimado)}` : 'Planejado',
+      comprado: false,
+      adicionadoPor: userAuthor,
+    };
+
+    setItems((prev) => [newItem, ...prev]);
+    setNewItemInput('');
+    setNewPriceInput('');
+    triggerToast(`"${newItem.nome}" adicionado à lista do Casal Duarte!`);
+  };
 
   // Toggle item status
   const handleToggleItem = async (id: string) => {
@@ -261,92 +338,196 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
     await toggleShoppingItemInCloud(id, nextState);
   };
 
-  // Add Item via form
-  const handleInsertItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newItemInput.trim()) return;
-
-    const nome = newItemInput.trim();
-    const cloudItem = await addShoppingItemToCloud({
-      nome,
-      quantidade: '1 un',
-      categoriaItem: newCategory,
-      adicionadoPor: 'Felipe',
-      origem: 'manual',
-      precoEstimado: 25.0,
-    });
-
-    const newItem: Item = {
-      id: cloudItem?.id || ('item-' + Date.now()),
-      nome,
-      quantidade: '1 un',
-      origem: 'Felipe (manual)',
-      categoria: newCategory,
-      classificacao: newCategory === 'Conforto/Lazer' ? 'Conforto / Gourmet' : 'Invariável (Essencial)',
-      preco: 25.0,
-      subinfo: 'Est. R$ 25,00',
-      comprado: false,
-    };
-
-    setItems((prev) => [newItem, ...prev]);
-    setNewItemInput('');
-    triggerToast(`"${newItem.nome}" adicionado e sincronizado ao Supabase!`);
+  // Delete item
+  const handleDeleteItem = async (id: string, nome: string) => {
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    await deleteShoppingItemInCloud(id);
+    triggerToast(`"${nome}" removido da lista.`);
   };
 
-  // Voice Simulation
-  const handleVoiceWaveClick = async () => {
-    setIsListening(true);
-    triggerToast('Escutando comando de voz: "Alexa, adicionar leite à lista"...');
-    setTimeout(async () => {
-      setIsListening(false);
-      const cloudItem = await addShoppingItemToCloud({
-        nome: 'Leite Desnatado 1L (6 un)',
-        quantidade: '6 un',
-        categoriaItem: 'Alimentos',
-        adicionadoPor: 'Felipe',
-        origem: 'alexa',
-        precoEstimado: 29.4,
-      });
-      const voiceItem: Item = {
-        id: cloudItem?.id || ('item-voice-' + Date.now()),
-        nome: 'Leite Desnatado 1L (6 un)',
-        quantidade: '6 un',
-        origem: 'Felipe via Alexa Echo Dot',
-        categoria: 'Alimentos',
-        classificacao: 'Invariável (Essencial)',
-        preco: 29.4,
-        subinfo: 'R$ 4,90 / un',
-        comprado: false,
-      };
-      setItems((prev) => [voiceItem, ...prev]);
-      triggerToast('Item reconhecido pela Alexa e sincronizado ao Supabase!');
-    }, 1500);
-  };
+  // Batch mark matched items as bought
+  const handleApproveReconciliation = async () => {
+    if (!reconciliationAudit || reconciliationAudit.matchedListItems.length === 0) {
+      triggerToast('Nenhum item da lista encontrado neste comprovante.', 'warn');
+      return;
+    }
 
-  // Filter items
-  const displayedItems = items
-    .filter((it) => {
-      if (activeFilter === 'todos') return true;
-      if (activeFilter === 'essenciais') return it.classificacao.includes('Essencial');
-      if (activeFilter === 'conforto') return it.classificacao.includes('Conforto');
-      if (activeFilter === 'pendentes') return !it.comprado;
-      if (activeFilter === 'comprados') return it.comprado;
-      return true;
-    })
-    .sort((a, b) => {
-      if (isSortedByCategory) {
-        return a.categoria.localeCompare(b.categoria);
-      }
-      return 0;
-    });
+    const matchedIds = reconciliationAudit.matchedListItems.map((m) => m.listItem.id);
+    
+    // Update local state
+    setItems((prev) =>
+      prev.map((it) => (matchedIds.includes(it.id) ? { ...it, comprado: true } : it))
+    );
 
-  // Approve reconciliation
-  const handleApproveReconciliation = () => {
+    // Update cloud Supabase
+    await batchToggleShoppingItemsInCloud(matchedIds, true);
     setReconciliationApproved(true);
+
     triggerToast(
-      'Reconciliação arquivada! R$ 487,90 debitado e rateado 50/50 (R$ 243,95 cada na NuConta).'
+      `✓ Sucesso! ${matchedIds.length} itens encontrados no cupom foram marcados como comprados na lista!`,
+      'success'
     );
   };
+
+  // Web Speech API: Real Voice Recognition
+  const handleToggleVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      // Fallback simulation
+      setIsListening(true);
+      triggerToast('Simulando comando de voz: "Adicionar 2 pacotes de arroz"...', 'info');
+      setTimeout(async () => {
+        setIsListening(false);
+        setNewItemInput('Arroz Branco Tipo 1 5kg');
+        setNewQuantityInput('2 pct');
+        setNewCategory('Alimentos');
+        triggerToast('Comando de voz transcrito!', 'success');
+      }, 1400);
+      return;
+    }
+
+    if (isListening) {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        triggerToast('Escutando... Fale o produto (ex: "Adicionar café especial")', 'info');
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setIsListening(false);
+
+        // Clean up common prefixes
+        const cleaned = transcript
+          .replace(/^(adicionar|adicione|adiciona|comprar|colocar|coloque|bote)\s+(à|a|na|no)?\s*(lista\s*(de\s*compras)?)?/i, '')
+          .trim();
+
+        if (cleaned) {
+          setNewItemInput(cleaned.charAt(0).toUpperCase() + cleaned.slice(1));
+          triggerToast(`Voz reconhecida: "${cleaned}"`, 'success');
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+        triggerToast('Não consegui ouvir o comando. Tente novamente ou digite.', 'warn');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsListening(false);
+      triggerToast('Microfone indisponível no navegador.', 'warn');
+    }
+  };
+
+  // WhatsApp Share Formatter
+  const handleShareWhatsApp = () => {
+    const pending = items.filter((it) => !it.comprado);
+    if (pending.length === 0) {
+      triggerToast('A lista de compras está sem itens pendentes.', 'info');
+      return;
+    }
+
+    const dateStr = new Date().toLocaleDateString('pt-BR');
+    let message = `🛒 *Lista de Compras do Casal Duarte*\n📅 ${dateStr}\n\n`;
+
+    // Group by category
+    const byCategory: Record<string, ShoppingItemUI[]> = {};
+    pending.forEach((it) => {
+      byCategory[it.categoria] = byCategory[it.categoria] || [];
+      byCategory[it.categoria].push(it);
+    });
+
+    Object.entries(byCategory).forEach(([cat, catItems]) => {
+      message += `*${cat.toUpperCase()}:*\n`;
+      catItems.forEach((it) => {
+        const precoStr = it.preco > 0 ? ` (Est. ${formatBRL(it.preco)})` : '';
+        message += `◻️ ${it.nome} - ${it.quantidade}${precoStr}\n`;
+      });
+      message += '\n';
+    });
+
+    const totalEst = pending.reduce((acc, it) => acc + (it.preco || 0), 0);
+    if (totalEst > 0) {
+      message += `💰 *Estimativa Total:* ${formatBRL(totalEst)}\n`;
+    }
+    message += `_Criado no Duarte Finanças por Felipe & Genivânia_`;
+
+    navigator.clipboard.writeText(message).then(() => {
+      triggerToast('✓ Lista copiada para a área de transferência! Pronta para colar no WhatsApp.', 'success');
+    });
+
+    const encoded = encodeURIComponent(message);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+  };
+
+  // Dynamic Metrics & Aggregations
+  const totalItemsCount = items.length;
+  const pendingItems = useMemo(() => items.filter((it) => !it.comprado), [items]);
+  const boughtItems = useMemo(() => items.filter((it) => it.comprado), [items]);
+  const pendingTotalEstimated = useMemo(() => pendingItems.reduce((s, i) => s + (i.preco || 0), 0), [pendingItems]);
+  const boughtTotalEstimated = useMemo(() => boughtItems.reduce((s, i) => s + (i.preco || 0), 0), [boughtItems]);
+
+  // Unique categories in list
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    items.forEach((it) => {
+      if (it.categoria) cats.add(it.categoria);
+    });
+    return Array.from(cats);
+  }, [items]);
+
+  // Filtered & Sorted Displayed Items
+  const displayedItems = useMemo(() => {
+    return items
+      .filter((it) => {
+        // Status filter
+        if (activeStatusFilter === 'pendentes' && it.comprado) return false;
+        if (activeStatusFilter === 'comprados' && !it.comprado) return false;
+
+        // Category filter
+        if (activeCategoryFilter !== 'todas' && it.categoria !== activeCategoryFilter) return false;
+
+        // Search query
+        if (searchQuery.trim()) {
+          const q = normalizeText(searchQuery);
+          const matchName = normalizeText(it.nome).includes(q);
+          const matchCat = normalizeText(it.categoria).includes(q);
+          const matchAuthor = normalizeText(it.adicionadoPor).includes(q);
+          if (!matchName && !matchCat && !matchAuthor) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (isSortedByCategory) {
+          return a.categoria.localeCompare(b.categoria);
+        }
+        // Default: pendentes first, then creation order
+        if (a.comprado !== b.comprado) {
+          return a.comprado ? 1 : -1;
+        }
+        return 0;
+      });
+  }, [items, activeStatusFilter, activeCategoryFilter, searchQuery, isSortedByCategory]);
 
   return (
     <div
@@ -355,9 +536,25 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
     >
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 bg-[#0b1c30] text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold border border-[#cbd5e1] animate-in slide-in-from-top-4">
-          <CheckCircle2 className="w-4 h-4 text-[#a7f3d0] shrink-0" />
-          <span>{toastMessage}</span>
+        <div
+          className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold border animate-in slide-in-from-top-4 ${
+            toastMessage.type === 'warn'
+              ? 'bg-amber-950 text-amber-100 border-amber-800'
+              : toastMessage.type === 'info'
+              ? 'bg-sky-950 text-sky-100 border-sky-800'
+              : 'bg-[#0b1c30] text-white border-emerald-500/40'
+          }`}
+        >
+          <CheckCircle2
+            className={`w-4 h-4 shrink-0 ${
+              toastMessage.type === 'warn'
+                ? 'text-amber-400'
+                : toastMessage.type === 'info'
+                ? 'text-sky-400'
+                : 'text-emerald-400'
+            }`}
+          />
+          <span>{toastMessage.text}</span>
           <button
             onClick={() => setToastMessage(null)}
             className="ml-2 text-white/60 hover:text-white"
@@ -368,389 +565,298 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* HEADER: Sync Alexa & Siri + Title + Counters                              */}
+      {/* 1. HEADER EXECUTIVO COM MÉTRICAS DINÂMICAS & AÇÕES RÁPIDAS                 */}
       {/* ========================================================================= */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Left: Titles & Alexa/Siri Badge */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] text-[#006948] font-bold text-xs">
-              <span className="w-2 h-2 rounded-full bg-[#006948] animate-pulse" />
-              Sync Alexa & Siri Ativo
-            </span>
-            <span className="text-xs text-[#565e74] font-medium">•</span>
-            <span className="text-xs text-[#565e74] font-medium flex items-center gap-1">
+            <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
               <Radio className="w-3 h-3 text-[#006194]" />
-              Eco Dot Sala & iPhones Conectados
+              Felipe & Genivânia Duarte
             </span>
           </div>
 
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0b1c30] tracking-tight">
-            Lista de Compras Inteligente & Auditoria de Hábitos
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+            Lista de Compras & Auditoria de Comprovantes
           </h1>
 
-          <p className="text-xs sm:text-sm text-[#565e74] max-w-3xl leading-relaxed">
-            Sincronização em tempo real com assistentes de voz, segregação por estabelecimentos e
-            reconciliação automática contra comprovantes de notas fiscais via IA.
+          <p className="text-xs sm:text-sm text-slate-500 max-w-3xl leading-relaxed">
+            Planeje o que precisa comprar e cruze automaticamente contra o cupom fiscal do supermercado para conferir itens presentes, esquecidos e compras por impulso.
           </p>
         </div>
 
-        {/* Right: Counter Pill Card (23 itens / Estimativa Total R$ 782,40) */}
-        <div className="bg-white border border-[#e5eeff] rounded-2xl p-2.5 sm:px-4 sm:py-2.5 flex items-center divide-x divide-[#e5eeff] shadow-2xs self-start md:self-auto">
-          {/* Left sub-counter */}
-          <div className="flex items-center gap-2.5 pr-3.5">
-            <div className="w-8 h-8 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-[#006948]" />
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="text-[10px] uppercase font-bold text-[#565e74] tracking-wider">
-                Itens Pendentes
-              </span>
-              <span className="font-display font-bold text-sm sm:text-base text-[#0b1c30] tnum">
-                23 itens
-              </span>
-            </div>
-          </div>
+        {/* Action Pills & Counters */}
+        <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+          {/* Share WhatsApp Button */}
+          <button
+            onClick={handleShareWhatsApp}
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
+            title="Copiar lista e abrir WhatsApp"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Compartilhar no WhatsApp</span>
+          </button>
 
-          {/* Right sub-counter */}
-          <div className="flex items-center gap-2.5 pl-3.5">
-            <div className="w-8 h-8 rounded-full bg-[#eff4ff] text-[#006194] flex items-center justify-center">
-              <Receipt className="w-4 h-4 text-[#006194]" />
+          {/* Quick Metrics Badge */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-2 sm:px-3.5 sm:py-2 flex items-center divide-x divide-slate-100 shadow-2xs">
+            <div className="flex items-center gap-2 pr-3">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-[#006948] flex items-center justify-center">
+                <ShoppingCart className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
+                  Pendentes
+                </span>
+                <span className="font-display font-bold text-xs sm:text-sm text-slate-900 tnum">
+                  {pendingItems.length} itens
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col text-left">
-              <span className="text-[10px] uppercase font-bold text-[#565e74] tracking-wider">
-                Estimativa Total
-              </span>
-              <span className="font-display font-bold text-sm sm:text-base text-[#0b1c30] tnum">
-                R$ 782,40
-              </span>
+
+            <div className="flex items-center gap-2 pl-3">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006194] flex items-center justify-center">
+                <ReceiptIcon className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
+                  Est. Pendente
+                </span>
+                <span className="font-display font-bold text-xs sm:text-sm text-slate-900 tnum">
+                  {formatBRL(pendingTotalEstimated)}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* ESTABLISHMENT SELECTOR PILLS (Atacadão, Drogasil, Sam's Club, Mercado Livre) */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
-        {/* Pill 1: Atacadão / Supermercado (ACTIVE) */}
-        <button
-          onClick={() => setActiveEstablishment('atacadao')}
-          className={`p-3 rounded-2xl transition-all flex items-center justify-between gap-2 text-left cursor-pointer border ${
-            activeEstablishment === 'atacadao'
-              ? 'bg-[#006948] text-white border-[#006948] shadow-sm ring-1 ring-[#006948]'
-              : 'bg-white hover:bg-[#f8f9ff] text-[#0b1c30] border-[#e5eeff]'
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                activeEstablishment === 'atacadao'
-                  ? 'bg-white/15 text-white'
-                  : 'bg-[#eff4ff] text-[#006948]'
-              }`}
-            >
-              <Store className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs sm:text-sm truncate">
-                Atacadão / Supermercado
-              </span>
-              <span
-                className={`text-[11px] truncate ${
-                  activeEstablishment === 'atacadao' ? 'text-white/80' : 'text-[#565e74]'
-                }`}
-              >
-                12 itens • Est. R$ 487,90
-              </span>
-            </div>
-          </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${
-              activeEstablishment === 'atacadao'
-                ? 'bg-white/20 text-white'
-                : 'bg-[#eff4ff] text-[#006948]'
-            }`}
-          >
-            12
-          </span>
-        </button>
-
-        {/* Pill 2: Drogasil / Farmácia */}
-        <button
-          onClick={() => setActiveEstablishment('drogasil')}
-          className={`p-3 rounded-2xl transition-all flex items-center justify-between gap-2 text-left cursor-pointer border ${
-            activeEstablishment === 'drogasil'
-              ? 'bg-[#006948] text-white border-[#006948] shadow-sm'
-              : 'bg-white hover:bg-[#f8f9ff] text-[#0b1c30] border-[#e5eeff]'
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                activeEstablishment === 'drogasil'
-                  ? 'bg-white/15 text-white'
-                  : 'bg-[#eff4ff] text-[#006194]'
-              }`}
-            >
-              <Pill className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs sm:text-sm truncate">Drogasil / Farmácia</span>
-              <span
-                className={`text-[11px] truncate ${
-                  activeEstablishment === 'drogasil' ? 'text-white/80' : 'text-[#565e74]'
-                }`}
-              >
-                4 itens • Est. R$ 112,00
-              </span>
-            </div>
-          </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${
-              activeEstablishment === 'drogasil'
-                ? 'bg-white/20 text-white'
-                : 'bg-[#eff4ff] text-[#006194]'
-            }`}
-          >
-            4
-          </span>
-        </button>
-
-        {/* Pill 3: Sam's Club */}
-        <button
-          onClick={() => setActiveEstablishment('sams')}
-          className={`p-3 rounded-2xl transition-all flex items-center justify-between gap-2 text-left cursor-pointer border ${
-            activeEstablishment === 'sams'
-              ? 'bg-[#006948] text-white border-[#006948] shadow-sm'
-              : 'bg-white hover:bg-[#f8f9ff] text-[#0b1c30] border-[#e5eeff]'
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                activeEstablishment === 'sams'
-                  ? 'bg-white/15 text-white'
-                  : 'bg-[#eff4ff] text-[#006194]'
-              }`}
-            >
-              <ShoppingBag className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs sm:text-sm truncate">Sam's Club</span>
-              <span
-                className={`text-[11px] truncate ${
-                  activeEstablishment === 'sams' ? 'text-white/80' : 'text-[#565e74]'
-                }`}
-              >
-                5 itens • Est. R$ 238,50
-              </span>
-            </div>
-          </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${
-              activeEstablishment === 'sams'
-                ? 'bg-white/20 text-white'
-                : 'bg-[#eff4ff] text-[#006194]'
-            }`}
-          >
-            5
-          </span>
-        </button>
-
-        {/* Pill 4: Mercado Livre / Casa */}
-        <button
-          onClick={() => setActiveEstablishment('mercadolivre')}
-          className={`p-3 rounded-2xl transition-all flex items-center justify-between gap-2 text-left cursor-pointer border ${
-            activeEstablishment === 'mercadolivre'
-              ? 'bg-[#006948] text-white border-[#006948] shadow-sm'
-              : 'bg-white hover:bg-[#f8f9ff] text-[#0b1c30] border-[#e5eeff]'
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                activeEstablishment === 'mercadolivre'
-                  ? 'bg-white/15 text-white'
-                  : 'bg-[#eff4ff] text-[#006194]'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs sm:text-sm truncate">Mercado Livre / Casa</span>
-              <span
-                className={`text-[11px] truncate ${
-                  activeEstablishment === 'mercadolivre' ? 'text-white/80' : 'text-[#565e74]'
-                }`}
-              >
-                2 itens • Est. R$ 89,00
-              </span>
-            </div>
-          </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${
-              activeEstablishment === 'mercadolivre'
-                ? 'bg-white/20 text-white'
-                : 'bg-[#eff4ff] text-[#006194]'
-            }`}
-          >
-            2
-          </span>
-        </button>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* TWO COLUMNS: Shopping List (Left) + Reconciliação Pós-Compra (Right)     */}
+      {/* 2. GRID PRINCIPAL: LISTA (Esquerda) + AUDITORIA DE COMPROVANTE (Direita)  */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* ======================================================================= */}
-        {/* LEFT COLUMN: Input + Filter + Itens no Atacadão (~62% width)           */}
+        {/* COLUNA ESQUERDA: Form de Adição + Lista de Itens (~58% largura)         */}
         {/* ======================================================================= */}
         <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Card 1: Adicionar por voz ou digitação */}
-          <div className="bg-white border border-[#e5eeff] rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 shadow-2xs">
-            {/* Header row */}
+          {/* Card: Adicionar Item (Digitação + Voz Real + Autor) */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Mic className="w-4 h-4 text-[#006948]" />
-                <span className="font-display font-bold text-sm text-[#0b1c30]">
-                  Adicionar por voz ou digitação
+                <div className="w-6 h-6 rounded-lg bg-emerald-50 text-[#006948] flex items-center justify-center">
+                  <Plus className="w-3.5 h-3.5 text-[#006948]" />
+                </div>
+                <span className="font-display font-bold text-sm text-slate-900">
+                  Adicionar Item à Lista
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5 text-[11px] text-[#565e74]">
-                <span className="w-2 h-2 rounded-full bg-[#006948]" />
-                <span>Alexa: "Alexa, adicione café à lista"</span>
+              {/* Author Switcher: Felipe vs Genivânia */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => setUserAuthor('Felipe')}
+                  className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    userAuthor === 'Felipe'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span>Felipe</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserAuthor('Genivânia')}
+                  className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    userAuthor === 'Genivânia'
+                      ? 'bg-white text-pink-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-pink-500" />
+                  <span>Genivânia</span>
+                </button>
               </div>
             </div>
 
-            {/* Input Form Row */}
-            <form onSubmit={handleInsertItem} className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
+            {/* Input Form */}
+            <form onSubmit={handleInsertItem} className="flex flex-col gap-2.5">
+              <div className="flex flex-col sm:flex-row gap-2">
+                {/* Item Name Input */}
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={newItemInput}
+                    onChange={(e) => setNewItemInput(e.target.value)}
+                    placeholder="Ex: Azeite Extra Virgem, Arroz 5kg, Detergente Omo..."
+                    className="w-full pl-3.5 pr-9 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006948] focus:bg-white transition-all"
+                  />
+                  {/* Voice Button */}
+                  <button
+                    type="button"
+                    onClick={handleToggleVoice}
+                    title={isListening ? 'Parar de ouvir' : 'Falar por voz'}
+                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all cursor-pointer ${
+                      isListening
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : 'text-slate-400 hover:text-[#006948] hover:bg-slate-200/60'
+                    }`}
+                  >
+                    {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {/* Quantity Input */}
                 <input
                   type="text"
-                  value={newItemInput}
-                  onChange={(e) => setNewItemInput(e.target.value)}
-                  placeholder="Ex: Azeite Extra Virgem 500ml 2 un, Deterg..."
-                  className="w-full pl-3.5 pr-8 py-2 text-xs rounded-xl bg-[#f8f9ff] border border-[#cbd5e1] text-[#0b1c30] placeholder:text-[#565e74] focus:outline-none focus:ring-2 focus:ring-[#006948]"
+                  value={newQuantityInput}
+                  onChange={(e) => setNewQuantityInput(e.target.value)}
+                  placeholder="Qtd (ex: 2 un, 1kg)"
+                  className="w-full sm:w-28 px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006948] focus:bg-white transition-all"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* Category select */}
-                <div className="relative">
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="appearance-none pl-3 pr-7 py-2 text-xs font-semibold rounded-xl bg-[#eff4ff] border border-[#dce9ff] text-[#0b1c30] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#006948]"
-                  >
-                    <option value="Alimentos">Alimentos</option>
-                    <option value="Bebidas">Bebidas</option>
-                    <option value="Limpeza">Limpeza</option>
-                    <option value="Higiene">Higiene</option>
-                    <option value="Conforto/Lazer">Conforto/Lazer</option>
-                    <option value="Farmácia">Farmácia</option>
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-[#565e74] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              {/* Second Row: Category + Estimated Price + Submit Button */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Category Dropdown */}
+                  <div className="relative">
+                    <select
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      className="appearance-none pl-3 pr-7 py-2 text-xs font-semibold rounded-xl bg-slate-100 border border-slate-200 text-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#006948]"
+                    >
+                      <option value="Alimentos">🥩 Alimentos / Carnes</option>
+                      <option value="Hortifruti">🥬 Hortifruti</option>
+                      <option value="Limpeza">🧹 Limpeza</option>
+                      <option value="Higiene">🧴 Higiene & Beleza</option>
+                      <option value="Bebidas">☕ Bebidas / Café</option>
+                      <option value="Conforto/Lazer">🍷 Conforto & Lazer</option>
+                      <option value="Farmácia">💊 Farmácia</option>
+                      <option value="Outros">📦 Outros</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+
+                  {/* Estimated Price Input (Optional) */}
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      R$
+                    </span>
+                    <input
+                      type="text"
+                      value={newPriceInput}
+                      onChange={(e) => setNewPriceInput(e.target.value)}
+                      placeholder="Preço Est. (opcional)"
+                      className="w-36 pl-7 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006948] focus:bg-white transition-all"
+                    />
+                  </div>
                 </div>
 
-                {/* Voice waveform simulator button */}
-                <button
-                  type="button"
-                  onClick={handleVoiceWaveClick}
-                  title="Testar comando de voz"
-                  className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    isListening
-                      ? 'bg-[#ba1a1a] text-white border-[#ba1a1a] animate-pulse'
-                      : 'bg-[#eff4ff] hover:bg-[#dce9ff] text-[#006194] border-[#dce9ff]'
-                  }`}
-                >
-                  <span className="font-mono text-sm tracking-tighter">|||||</span>
-                </button>
-
-                {/* Insert button */}
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-[#006948] hover:bg-[#00563b] text-white text-xs font-bold flex items-center gap-1 transition-all shadow-xs cursor-pointer active:scale-95"
+                  className="px-4 py-2 rounded-xl bg-[#006948] hover:bg-[#005238] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Inserir</span>
+                  <span>Adicionar à Lista</span>
                 </button>
               </div>
             </form>
 
-            {/* Quick Filter row */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-[#f1f5f9] text-xs">
-              <span className="text-[11px] text-[#565e74] font-medium mr-1">Filtros rápidos:</span>
+            {/* Quick Status Filters */}
+            <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-slate-100 text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setActiveStatusFilter('pendentes')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    activeStatusFilter === 'pendentes'
+                      ? 'bg-emerald-50 text-[#006948] border border-emerald-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Pendentes ({pendingItems.length})
+                </button>
 
-              <button
-                onClick={() => setActiveFilter('todos')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  activeFilter === 'todos'
-                    ? 'bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]'
-                    : 'bg-[#f8f9ff] text-[#565e74] hover:bg-[#eff4ff]'
-                }`}
-              >
-                Todos (12)
-              </button>
+                <button
+                  onClick={() => setActiveStatusFilter('comprados')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    activeStatusFilter === 'comprados'
+                      ? 'bg-emerald-50 text-[#006948] border border-emerald-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Comprados ({boughtItems.length})
+                </button>
 
-              <button
-                onClick={() => setActiveFilter('essenciais')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  activeFilter === 'essenciais'
-                    ? 'bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]'
-                    : 'bg-[#f8f9ff] text-[#565e74] hover:bg-[#eff4ff]'
-                }`}
-              >
-                Essenciais (8)
-              </button>
+                <button
+                  onClick={() => setActiveStatusFilter('todos')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    activeStatusFilter === 'todos'
+                      ? 'bg-emerald-50 text-[#006948] border border-emerald-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todos ({totalItemsCount})
+                </button>
+              </div>
 
-              <button
-                onClick={() => setActiveFilter('conforto')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  activeFilter === 'conforto'
-                    ? 'bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]'
-                    : 'bg-[#f8f9ff] text-[#565e74] hover:bg-[#eff4ff]'
-                }`}
-              >
-                Conforto/Lazer (4)
-              </button>
-
-              <button
-                onClick={() => setActiveFilter('pendentes')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  activeFilter === 'pendentes'
-                    ? 'bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]'
-                    : 'bg-[#f8f9ff] text-[#565e74] hover:bg-[#eff4ff]'
-                }`}
-              >
-                Pendentes (10)
-              </button>
-
-              <button
-                onClick={() => setActiveFilter('comprados')}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  activeFilter === 'comprados'
-                    ? 'bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]'
-                    : 'bg-[#f8f9ff] text-[#565e74] hover:bg-[#eff4ff]'
-                }`}
-              >
-                Comprados (2)
-              </button>
+              {/* Search input */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar produto..."
+                  className="pl-7 pr-2.5 py-1 text-xs rounded-lg bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#006948] w-36 sm:w-44"
+                />
+              </div>
             </div>
+
+            {/* Category Filter Pills (if more than 1 category) */}
+            {availableCategories.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+                <span className="text-[10px] text-slate-400 uppercase font-bold mr-1">Categoria:</span>
+                <button
+                  onClick={() => setActiveCategoryFilter('todas')}
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
+                    activeCategoryFilter === 'todas'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todas
+                </button>
+                {availableCategories.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setActiveCategoryFilter(c)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
+                      activeCategoryFilter === c
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {c} ({items.filter((i) => i.categoria === c).length})
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Card 2: Itens no Atacadão */}
-          <div className="bg-white border border-[#e5eeff] rounded-2xl p-4 sm:p-5 flex flex-col gap-3 shadow-2xs">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-[#f1f5f9]">
+          {/* List of Items */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col gap-3 shadow-2xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <span className="font-display font-bold text-sm sm:text-base text-[#0b1c30]">
-                  Itens no Atacadão
+                <span className="font-display font-bold text-sm text-slate-900">
+                  {activeStatusFilter === 'pendentes'
+                    ? 'Itens para Comprar'
+                    : activeStatusFilter === 'comprados'
+                    ? 'Itens Já Comprados'
+                    : 'Todos os Itens'}
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#f1f5f9] text-[#565e74] text-[10px] font-medium">
-                  Sincronizado há 2 min
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
+                  {displayedItems.length}
                 </span>
               </div>
 
@@ -763,692 +869,397 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = () => {
               </button>
             </div>
 
-            {/* List of items */}
+            {/* Empty State */}
+            {displayedItems.length === 0 && (
+              <div className="py-10 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
+                <ShoppingCart className="w-8 h-8 stroke-1 text-slate-300" />
+                <p className="text-xs font-medium">
+                  {items.length === 0
+                    ? 'Nenhum produto cadastrado na lista de compras.'
+                    : 'Nenhum item corresponde ao filtro selecionado.'}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Adicione novos itens digitando ou falando pelo microfone acima.
+                </p>
+              </div>
+            )}
+
+            {/* Items Render */}
             <div className="flex flex-col gap-2.5">
               {displayedItems.map((item) => (
                 <div
                   key={item.id}
                   className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
                     item.comprado
-                      ? 'bg-[#f8f9ff] border-[#e5eeff]'
-                      : 'bg-white border-[#cbd5e1]'
+                      ? 'bg-slate-50/70 border-slate-200 opacity-75'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  {/* Left checkbox & text */}
-                  <div className="flex items-start gap-3 min-w-0">
+                  {/* Left Checkbox & Info */}
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
                     <button
                       onClick={() => handleToggleItem(item.id)}
+                      title={item.comprado ? 'Desmarcar' : 'Marcar como comprado'}
                       className={`w-5 h-5 mt-0.5 rounded-md flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                         item.comprado
                           ? 'bg-[#006948] text-white'
-                          : 'border-2 border-[#cbd5e1] hover:border-[#006948]'
+                          : 'border-2 border-slate-300 hover:border-[#006948]'
                       }`}
                     >
-                      {item.comprado && <Check className="w-3.5 h-3.5 text-white" />}
+                      {item.comprado && <Check className="w-3.5 h-3.5 text-white stroke-3" />}
                     </button>
 
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
                           className={`text-xs font-bold truncate ${
-                            item.comprado ? 'text-[#0b1c30]' : 'text-[#0b1c30]'
+                            item.comprado ? 'text-slate-500 line-through' : 'text-slate-900'
                           }`}
                         >
                           {item.nome}
                         </span>
 
-                        <span className="px-1.5 py-0.5 rounded-md bg-[#eff4ff] text-[#006194] text-[10px] font-bold">
+                        <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
                           {item.quantidade}
                         </span>
 
-                        {item.naoFaturado && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#ffdad6] text-[#ba1a1a] text-[9px] font-bold">
-                            <AlertTriangle className="w-2.5 h-2.5" />
-                            Não faturado no cupom
+                        {item.comprado && (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold">
+                            <Check className="w-2.5 h-2.5" /> Comprado
                           </span>
                         )}
                       </div>
 
-                      {/* Sub-badges row */}
+                      {/* Badges: Author + Category + Class */}
                       <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                        <span className="text-[10px] text-[#006948] font-semibold bg-[#ecfdf5] px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <Mic className="w-2.5 h-2.5" />
-                          {item.origem}
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                            item.adicionadoPor === 'Felipe'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200/50'
+                              : 'bg-pink-50 text-pink-700 border border-pink-200/50'
+                          }`}
+                        >
+                          {item.adicionadoPor}
                         </span>
 
-                        <span className="text-[10px] text-[#565e74] bg-[#f1f5f9] px-1.5 py-0.5 rounded font-medium">
+                        <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded font-medium">
                           {item.categoria}
                         </span>
 
-                        <span className="text-[10px] text-[#006948] bg-[#ecfdf5] px-1.5 py-0.5 rounded font-medium">
-                          {item.classificacao}
+                        <span className="text-[9px] text-slate-400">
+                          {item.origem}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Price block */}
-                  <div className="flex flex-col items-end text-right shrink-0">
-                    <span className="font-display font-bold text-xs sm:text-sm text-[#0b1c30] tnum">
-                      {formatBRL(item.preco)}
-                    </span>
-                    <span className="text-[10px] text-[#565e74]">{item.subinfo}</span>
+                  {/* Right Price & Delete Button */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex flex-col items-end text-right">
+                      {item.preco > 0 ? (
+                        <>
+                          <span className="font-display font-bold text-xs text-slate-900 tnum">
+                            {formatBRL(item.preco)}
+                          </span>
+                          <span className="text-[9px] text-slate-400">Est.</span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">Sem valor</span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteItem(item.id, item.nome)}
+                      className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Remover item"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
 
-            {/* Accordion / Expandable banner for the 7 additional items */}
-            <div className="mt-1 pt-2 border-t border-[#f1f5f9]">
-              <button
-                onClick={() => setShowMoreItems(!showMoreItems)}
-                className="w-full p-2.5 rounded-xl bg-[#eff4ff] hover:bg-[#dce9ff] text-[#006194] text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer"
-              >
+        {/* ======================================================================= */}
+        {/* COLUNA DIREITA: AUDITORIA & CONFERÊNCIA DE COMPROVANTE (~42% largura)    */}
+        {/* ======================================================================= */}
+        <div className="lg:col-span-5 flex flex-col gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-2xs gap-4">
+            {/* Header da Auditoria */}
+            <div>
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-[#006194]" />
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-[#006948] flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-[#006948]" />
+                  </div>
+                  <h2 className="font-display font-bold text-base text-slate-900">
+                    Auditoria de Comprovante
+                  </h2>
+                </div>
+
+                {onNavigateTab && (
+                  <button
+                    onClick={() => onNavigateTab('scanner')}
+                    className="text-xs text-[#006194] hover:text-[#004e76] font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Escanear Novo</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Cruze os itens que você planejou comprar com as linhas do cupom fiscal emitido pelo supermercado.
+              </p>
+
+              {/* Seletor do Comprovante do Casal */}
+              {availableSupermarketReceipts.length > 0 ? (
+                <div className="mt-3.5 flex flex-col gap-2">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Comprovante para Conferência:
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedReceiptId}
+                      onChange={(e) => setSelectedReceiptId(e.target.value)}
+                      className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-bold rounded-xl bg-slate-50 border border-slate-200 text-slate-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#006948]"
+                    >
+                      {availableSupermarketReceipts.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.estabelecimento || 'Supermercado'} • {formatBRL(r.valorTotal)} (
+                          {r.itens?.length || 0} itens lidos)
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>
-                    Mais 7 itens planejados adicionados ao carrinho e validados pela leitura do cupom.
+                    Nenhum comprovante de supermercado com itens detalhados encontrado. Anexe ou escaneie uma nota fiscal para auditar.
                   </span>
                 </div>
-                <div className="flex items-center gap-1 font-bold">
-                  <span>{showMoreItems ? 'Ocultar Detalhes' : 'Expandir Detalhes'}</span>
-                  {showMoreItems ? (
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  )}
-                </div>
-              </button>
+              )}
 
-              {/* Extra Items List */}
-              {showMoreItems && (
-                <div className="mt-2 flex flex-col gap-2 animate-in fade-in">
-                  {extraItems.map((ex) => (
-                    <div
-                      key={ex.id}
-                      className="p-2.5 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-between gap-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-[#006948] text-white flex items-center justify-center">
-                          <Check className="w-3 h-3" />
-                        </div>
-                        <span className="font-semibold text-[#0b1c30]">{ex.nome}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-[#eff4ff] text-[10px] text-[#006194] font-bold">
-                          {ex.quantidade}
+              {/* CARD DE RESULTADOS DA AUDITORIA */}
+              {reconciliationAudit && (
+                <div className="mt-3.5 flex flex-col gap-3.5 animate-in fade-in duration-200">
+                  {/* Scorecard de Cumprimento da Lista */}
+                  <div className="p-3.5 bg-gradient-to-br from-emerald-50/70 to-slate-50 border border-emerald-200/80 rounded-xl flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        ADERÊNCIA À LISTA
+                      </span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className="font-display font-black text-2xl text-[#006948] tnum">
+                          {reconciliationAudit.adherenceRate}%
                         </span>
-                        <span className="text-[10px] text-[#565e74] bg-[#f1f5f9] px-1.5 py-0.5 rounded">
-                          {ex.categoria}
+                        <span className="text-xs text-slate-500 font-medium">da lista atendida</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-0.5">
+                        {reconciliationAudit.matchedListItems.length} de {items.length} itens planejados estavam no cupom
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col items-end text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                        TOTAL DO CUPOM
+                      </span>
+                      <span className="font-display font-black text-lg text-slate-900 tnum">
+                        {formatBRL(reconciliationAudit.totalReceiptVal)}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {reconciliationAudit.receipt.itens?.length || 0} itens processados
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 1. ITENS ENCONTRADOS / PRESENTES NO CUPOM */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-emerald-800 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Itens Encontrados no Cupom ({reconciliationAudit.matchedListItems.length})</span>
+                      </span>
+                      <span className="font-bold text-slate-900 tnum text-[11px]">
+                        {formatBRL(reconciliationAudit.totalMatchedVal)}
+                      </span>
+                    </div>
+
+                    {reconciliationAudit.matchedListItems.length > 0 ? (
+                      <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                        {reconciliationAudit.matchedListItems.map((m, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2 rounded-lg bg-emerald-50/40 border border-emerald-200/60 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-bold text-slate-900 truncate">
+                                {m.listItem.nome}
+                              </span>
+                              <span className="text-[10px] text-slate-500 truncate">
+                                Cupom: {m.receiptItem.nome || m.receiptItem.descricao}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-end shrink-0">
+                              <span className="font-bold text-slate-900 tnum">
+                                {formatBRL(m.precoReal)}
+                              </span>
+                              {m.economia !== 0 && (
+                                <span
+                                  className={`text-[9px] font-bold ${
+                                    m.economia > 0 ? 'text-emerald-700' : 'text-amber-700'
+                                  }`}
+                                >
+                                  {m.economia > 0
+                                    ? `- ${formatBRL(m.economia)} vs est.`
+                                    : `+ ${formatBRL(Math.abs(m.economia))} vs est.`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500 italic">
+                        Nenhum item da lista coincidiu com as linhas deste comprovante.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. ITENS FALTANTES / NÃO ENCONTRADOS (ESQUECIDOS) */}
+                  {reconciliationAudit.missingListItems.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-[#006194] flex items-center gap-1">
+                          <Info className="w-3.5 h-3.5 text-[#006194]" />
+                          <span>Faltaram Comprar / Não Faturados ({reconciliationAudit.missingListItems.length})</span>
                         </span>
                       </div>
-                      <div className="font-bold text-[#0b1c30] tnum">{formatBRL(ex.preco)}</div>
+
+                      <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                        {reconciliationAudit.missingListItems.map((it) => (
+                          <div
+                            key={it.id}
+                            className="p-2 rounded-lg bg-blue-50/40 border border-blue-200/60 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-semibold text-slate-800 truncate">
+                                {it.nome}
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                ({it.quantidade})
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.5 rounded shrink-0">
+                              Permanece na lista
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* 3. ITENS EXTRAS / FORA DA LISTA (COMPRAS DE IMPULSO) */}
+                  {reconciliationAudit.extraReceiptItems.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-amber-800 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Itens Fora da Lista ({reconciliationAudit.extraReceiptItems.length})</span>
+                        </span>
+                        <span className="font-bold text-amber-900 tnum text-[11px]">
+                          {formatBRL(reconciliationAudit.totalExtraVal)}
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-slate-500">
+                        Produtos faturados no supermercado que não constavam no planejamento do casal:
+                      </p>
+
+                      <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                        {reconciliationAudit.extraReceiptItems.slice(0, 6).map((rItem, rIdx) => {
+                          const val = Number(rItem.precoTotal || rItem.preco_total || rItem.valorTotal || 0);
+                          return (
+                            <div
+                              key={rIdx}
+                              className="p-2 rounded-lg bg-amber-50/30 border border-amber-200/60 flex items-center justify-between text-xs"
+                            >
+                              <span className="text-slate-800 truncate font-medium">
+                                {rItem.nome || rItem.descricao || rItem.nome_do_item}
+                              </span>
+                              <span className="font-bold text-amber-900 tnum shrink-0 ml-2">
+                                {formatBRL(val)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {reconciliationAudit.extraReceiptItems.length > 6 && (
+                          <span className="text-[10px] text-slate-400 italic text-center">
+                            + {reconciliationAudit.extraReceiptItems.length - 6} outros itens fora da lista
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Button: Dar Baixa Automática */}
+                  <div className="pt-2 flex flex-col gap-2">
+                    <button
+                      onClick={handleApproveReconciliation}
+                      disabled={reconciliationAudit.matchedListItems.length === 0}
+                      className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer active:scale-98 ${
+                        reconciliationApproved
+                          ? 'bg-emerald-50 text-[#006948] border border-emerald-300'
+                          : reconciliationAudit.matchedListItems.length > 0
+                          ? 'bg-[#006948] hover:bg-[#005238] text-white'
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      <span>
+                        {reconciliationApproved
+                          ? '✓ Baixa Efetuada nos Itens da Lista!'
+                          : `Dar Baixa Automática nos ${reconciliationAudit.matchedListItems.length} Itens Comprados`}
+                      </span>
+                    </button>
+                    <span className="text-[10px] text-center text-slate-400">
+                      Marca os produtos encontrados como comprados e preserva os itens faltantes para a próxima ida às compras.
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
-
-        {/* ======================================================================= */}
-        {/* RIGHT COLUMN: Reconciliação Pós-Compra (~38% width)                     */}
-        {/* ======================================================================= */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          <div className="bg-white border border-[#e5eeff] rounded-2xl p-5 flex flex-col justify-between shadow-2xs gap-4">
-            {/* Title Header */}
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-[#006948]" />
-                </div>
-                <h2 className="font-display font-bold text-base text-[#0b1c30]">
-                  Reconciliação Pós-Compra
-                </h2>
-              </div>
-              <p className="text-xs text-[#565e74] mt-1 leading-relaxed">
-                Auditoria autônoma de cupom fiscal com cruzamento preditivo de intenção x realidade.
-              </p>
-
-              {/* NFC-e Card (Green IA Badge + Value R$ 487,90) */}
-              <div className="mt-3.5 p-3.5 bg-[#eff4ff] border border-[#dce9ff] rounded-xl flex items-center justify-between">
-                <div className="flex items-start gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-white border border-[#dce9ff] text-[#006948] flex items-center justify-center shrink-0 mt-0.5">
-                    <Receipt className="w-4 h-4" />
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-xs text-[#0b1c30]">NFC-e Atacadão #92819</span>
-                      <span className="px-1.5 py-0.5 rounded-full bg-[#a7f3d0] text-[#006948] font-bold text-[9px]">
-                        Lido via IA
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-[#565e74] mt-0.5">
-                      24/03/2026 • 19:42 • Chave 3526...0192
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end text-right">
-                  <span className="font-display font-black text-base sm:text-lg text-[#0b1c30] tnum">
-                    R$ 487,90
-                  </span>
-                  <span className="text-[10px] text-[#565e74]">12 Itens Processados</span>
-                </div>
-              </div>
-
-              {/* Aderência à Lista (Circular Ring + 3 metrics) */}
-              <div className="mt-3.5 p-3.5 bg-[#f8f9ff] border border-[#dce9ff] rounded-xl flex flex-col gap-3">
-                {/* Circular ring row */}
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-[#565e74] tracking-wider">
-                      ADERÊNCIA À LISTA
-                    </span>
-                    <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="font-display font-black text-2xl sm:text-3xl text-[#006948] tnum">
-                        82%
-                      </span>
-                      <span className="text-xs text-[#565e74] font-medium">de fidelidade</span>
-                    </div>
-                  </div>
-
-                  {/* SVG Circular Ring Gauge (82%) */}
-                  <div className="relative w-14 h-14 flex items-center justify-center">
-                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                      {/* Background circle */}
-                      <path
-                        className="text-[#dce9ff]"
-                        strokeWidth="3.5"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      {/* 82% stroke */}
-                      <path
-                        className="text-[#006948]"
-                        strokeDasharray="82, 100"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                    </svg>
-                    <span className="absolute font-bold text-[11px] text-[#006948]">82%</span>
-                  </div>
-                </div>
-
-                {/* 3 Metrics sub-grid: Planejadas, Faltantes, Impulso */}
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#dce9ff]/60 text-center">
-                  <div className="flex flex-col bg-white p-2 rounded-lg border border-[#e5eeff]">
-                    <span className="text-[9px] uppercase font-bold text-[#565e74]">PLANEJADAS</span>
-                    <span className="font-display font-bold text-xs text-[#0b1c30] mt-0.5">
-                      10 itens
-                    </span>
-                    <span className="text-[10px] text-[#565e74]">R$ 375,50</span>
-                  </div>
-
-                  <div className="flex flex-col bg-white p-2 rounded-lg border border-[#e5eeff]">
-                    <span className="text-[9px] uppercase font-bold text-[#565e74]">FALTANTES</span>
-                    <span className="font-display font-bold text-xs text-[#006194] mt-0.5">
-                      2 itens
-                    </span>
-                    <span className="text-[10px] text-[#565e74]">R$ 84,80</span>
-                  </div>
-
-                  <div className="flex flex-col bg-[#ffdad6]/40 p-2 rounded-lg border border-[#ffdad6]">
-                    <span className="text-[9px] uppercase font-bold text-[#ba1a1a]">IMPULSO</span>
-                    <span className="font-display font-bold text-xs text-[#ba1a1a] mt-0.5">
-                      2 extras
-                    </span>
-                    <span className="text-[10px] font-bold text-[#ba1a1a]">R$ 82,90</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Itens Extras Não Previstos (Compras por Impulso) */}
-              <div className="mt-3.5 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#0b1c30] flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-[#ba1a1a]" />
-                    Itens Extras Não Previstos (Compras por Impulso)
-                  </span>
-                  <span className="text-xs font-bold text-[#ba1a1a]">R$ 82,90</span>
-                </div>
-
-                {/* Extra Item 1: Vinho Tinto */}
-                <div className="p-2.5 rounded-xl bg-[#ffdad6]/25 border border-[#ffdad6] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center shrink-0">
-                      <Wine className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-xs text-[#0b1c30]">
-                        Vinho Tinto Chileno Reserva 750ml
-                      </span>
-                      <span className="text-[10px] text-[#565e74]">
-                        Item de Lazer fora da lista de supermercado
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end text-right shrink-0">
-                    <span className="font-bold text-xs text-[#ba1a1a]">R$ 68,00</span>
-                    <span className="text-[9px] text-[#ba1a1a] font-semibold">Impulso #1</span>
-                  </div>
-                </div>
-
-                {/* Extra Item 2: Biscoito Recheado */}
-                <div className="p-2.5 rounded-xl bg-[#ffdad6]/25 border border-[#ffdad6] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center shrink-0">
-                      <Cookie className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-xs text-[#0b1c30]">
-                        Biscoito Recheado Importado 200g
-                      </span>
-                      <span className="text-[10px] text-[#565e74]">Snack adicionado no caixa</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end text-right shrink-0">
-                    <span className="font-bold text-xs text-[#ba1a1a]">R$ 14,90</span>
-                    <span className="text-[9px] text-[#ba1a1a] font-semibold">Impulso #2</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Box: Alocação Proativa de Orçamento */}
-              <div className="mt-3.5 p-3 rounded-xl bg-[#eff4ff] border border-[#dce9ff] flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-[#006194] shrink-0 mt-0.5" />
-                <div className="flex flex-col text-xs leading-relaxed text-[#565e74]">
-                  <span className="font-bold text-[#0b1c30]">Alocação Proativa de Orçamento</span>
-                  <span>
-                    Atenção: Os <strong className="text-[#0b1c30]">R$ 68,00</strong> gastos com vinho
-                    não constavam na lista de supermercado e foram alocados automaticamente para o
-                    teto de <strong className="text-[#0b1c30]">"Lazer & Gastronomia"</strong> para
-                    blindar a meta de alimentação essencial do casal.
-                  </span>
-                </div>
-              </div>
-
-              {/* Note: Itens esquecidos no próximo ciclo */}
-              <div className="mt-2.5 flex items-center justify-between p-2 rounded-lg bg-[#f8f9ff] text-xs text-[#565e74]">
-                <div className="flex items-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5 text-[#006194]" />
-                  <span>2 itens esquecidos permanecerão ativos na lista do próximo ciclo:</span>
-                </div>
-                <span className="font-bold text-[#006194] bg-[#eff4ff] px-2 py-0.5 rounded">
-                  Café & Sabão
-                </span>
-              </div>
-            </div>
-
-            {/* Action Button: Aprovar Reconciliação e Arquivar Itens */}
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={handleApproveReconciliation}
-                className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer active:scale-98 ${
-                  reconciliationApproved
-                    ? 'bg-[#ecfdf5] text-[#006948] border border-[#a7f3d0]'
-                    : 'bg-[#006948] hover:bg-[#00563b] text-white'
-                }`}
-              >
-                <CheckCheck className="w-4 h-4" />
-                <span>
-                  {reconciliationApproved
-                    ? '✓ Reconciliação Aprovada & Balanço Atualizado'
-                    : 'Aprovar Reconciliação e Arquivar Itens'}
-                </span>
-              </button>
-              <span className="text-[11px] text-center text-[#565e74]">
-                Atualiza o balanço compartilhado e o extrato bancário 50/50 em 1 clique.
-              </span>
-            </div>
-
-            {/* Footer: Despesa Conjunta Atacadão */}
-            <div className="pt-3 border-t border-[#f1f5f9] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center -space-x-1.5">
-                  <div className="w-6 h-6 rounded-full bg-[#2563eb] text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-white">
-                    F
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-[#ec4899] text-white font-bold text-[10px] flex items-center justify-center ring-2 ring-white">
-                    G
-                  </div>
-                </div>
-
-                <div className="flex flex-col">
-                  <span className="font-bold text-xs text-[#0b1c30]">Despesa Compartilhada</span>
-                  <span className="text-[10px] text-[#565e74]">Orçamento Conjunto 50/50</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-end text-right">
-                <span className="font-display font-bold text-xs sm:text-sm text-[#0b1c30] tnum">
-                  R$ 487,90
-                </span>
-                <span className="text-[10px] text-[#006948] font-semibold">Conta do Casal</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* LOWER SECTION: EVOLUÇÃO COMPORTAMENTAL DO CASAL                           */}
+      {/* 3. RODAPÉ INFORMATIVO TRANSPARENTE                                        */}
       {/* ========================================================================= */}
-      <div className="flex flex-col gap-3 pt-2">
-        {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#006948] block">
-              EVOLUÇÃO COMPORTAMENTAL DO CASAL
-            </span>
-            <h2 className="font-display font-bold text-base sm:text-lg text-[#0b1c30]">
-              Histórico de Reconciliações Anteriores & Redução de Impulso
-            </h2>
-            <p className="text-xs text-[#565e74] mt-0.5">
-              Acompanhamento mensal da disciplina de compras. A taxa de impulsividade caiu de 24%
-              para apenas 8% nos últimos 6 meses.
-            </p>
-          </div>
-
-          {/* Green Savings banner */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#ecfdf5] border border-[#a7f3d0] text-xs font-bold text-[#006948] self-start sm:self-auto shadow-2xs">
-            <ShoppingBag className="w-4 h-4 text-[#006948]" />
-            <span>Economia acumulada com auditoria: R$ 1.420,00</span>
-          </div>
-        </div>
-
-        {/* Lower Two Columns Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Left Card: Taxa de Gastos Não Previstos (Bar Chart 6 months) (~65% width) */}
-          <div className="lg:col-span-7 bg-white border border-[#e5eeff] rounded-2xl p-5 flex flex-col justify-between shadow-2xs gap-4">
-            <div>
-              {/* Header with Legend */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span className="font-display font-bold text-xs sm:text-sm text-[#0b1c30]">
-                  Taxa de Gastos Não Previstos (% do Total Gasto)
-                </span>
-
-                <div className="flex items-center gap-3 text-[11px] text-[#565e74]">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#dce9ff]" />
-                    Compras Planejadas
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#006948]" />
-                    Itens Impulsivos Auditados
-                  </span>
-                </div>
-              </div>
-
-              {/* 6-month visual stacked bars */}
-              <div className="grid grid-cols-6 gap-2 sm:gap-4 mt-6 items-end h-44 pb-2 border-b border-[#f1f5f9]">
-                {/* Out 25: 24% */}
-                <div className="flex flex-col items-center h-full justify-end gap-1.5">
-                  <span className="text-[10px] font-bold text-[#ba1a1a]">24%</span>
-                  <div className="w-full max-w-[42px] h-32 rounded-lg bg-[#dce9ff]/60 flex flex-col justify-end overflow-hidden p-0.5">
-                    <div className="w-full h-[24%] bg-[#ba1a1a] rounded" />
-                  </div>
-                  <span className="text-[10px] text-[#565e74] font-semibold">Out 25</span>
-                </div>
-
-                {/* Nov 25: 21% */}
-                <div className="flex flex-col items-center h-full justify-end gap-1.5">
-                  <span className="text-[10px] font-bold text-[#ba1a1a]">21%</span>
-                  <div className="w-full max-w-[42px] h-32 rounded-lg bg-[#dce9ff]/60 flex flex-col justify-end overflow-hidden p-0.5">
-                    <div className="w-full h-[21%] bg-[#ba1a1a] rounded" />
-                  </div>
-                  <span className="text-[10px] text-[#565e74] font-semibold">Nov 25</span>
-                </div>
-
-                {/* Dez 25: 18% */}
-                <div className="flex flex-col items-center h-full justify-end gap-1.5">
-                  <span className="text-[10px] font-bold text-[#006194]">18%</span>
-                  <div className="w-full max-w-[42px] h-32 rounded-lg bg-[#dce9ff]/60 flex flex-col justify-end overflow-hidden p-0.5">
-                    <div className="w-full h-[18%] bg-[#006194] rounded" />
-                  </div>
-                  <span className="text-[10px] text-[#565e74] font-semibold">Dez 25</span>
-                </div>
-
-                {/* Jan 26: 14% */}
-                <div className="flex flex-col items-center h-full justify-end gap-1.5">
-                  <span className="text-[10px] font-bold text-[#006948]">14%</span>
-                  <div className="w-full max-w-[42px] h-32 rounded-lg bg-[#dce9ff]/60 flex flex-col justify-end overflow-hidden p-0.5">
-                    <div className="w-full h-[14%] bg-[#006948] rounded" />
-                  </div>
-                  <span className="text-[10px] text-[#565e74] font-semibold">Jan 26</span>
-                </div>
-
-                {/* Fev 26: 11% */}
-                <div className="flex flex-col items-center h-full justify-end gap-1.5">
-                  <span className="text-[10px] font-bold text-[#006948]">11%</span>
-                  <div className="w-full max-w-[42px] h-32 rounded-lg bg-[#dce9ff]/60 flex flex-col justify-end overflow-hidden p-0.5">
-                    <div className="w-full h-[11%] bg-[#006948] rounded" />
-                  </div>
-                  <span className="text-[10px] text-[#565e74] font-semibold">Fev 26</span>
-                </div>
-
-                {/* Mar 26: 8% ✨ HIGHLIGHT */}
-                <div className="flex flex-col items-center h-full justify-end gap-1.5">
-                  <span className="text-[10px] font-black text-[#006948] flex items-center gap-0.5">
-                    8% ✨
-                  </span>
-                  <div className="w-full max-w-[42px] h-32 rounded-lg bg-[#ecfdf5] border-2 border-[#006948] flex flex-col justify-end overflow-hidden p-0.5 shadow-xs">
-                    <div className="w-full h-[8%] bg-[#006948] rounded" />
-                  </div>
-                  <span className="text-[10px] text-[#006948] font-bold">Mar 26</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Meta info */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
-              <span className="text-[#565e74]">
-                Meta de autocontrole estipulada pelo casal:{' '}
-                <strong className="text-[#0b1c30]">menor que 10%</strong>
-              </span>
-
-              <span className="text-[#006948] font-bold flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-[#006948]" />
-                Meta batida por 2 meses consecutivos!
-              </span>
-            </div>
-          </div>
-
-          {/* Right Card: Últimas Reconciliações (~35% width) */}
-          <div className="lg:col-span-5 bg-white border border-[#e5eeff] rounded-2xl p-5 flex flex-col justify-between shadow-2xs gap-3">
-            <div>
-              {/* Header */}
-              <div className="flex items-center justify-between pb-2 border-b border-[#f1f5f9]">
-                <span className="font-display font-bold text-sm text-[#0b1c30]">
-                  Últimas Reconciliações
-                </span>
-                <button
-                  onClick={() => setShowAllReconciliationsModal(true)}
-                  className="text-xs text-[#006194] hover:text-[#004e76] font-semibold cursor-pointer"
-                >
-                  Ver Todas
-                </button>
-              </div>
-
-              {/* Items */}
-              <div className="flex flex-col gap-2.5 mt-3">
-                {/* 1. Sam's Club */}
-                <div className="p-2.5 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center shrink-0">
-                      <Check className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-xs text-[#0b1c30]">Sam's Club #8812</span>
-                      <span className="text-[10px] text-[#565e74]">18/03 • 91% aderência</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end text-right">
-                    <span className="font-display font-bold text-xs text-[#0b1c30] tnum">
-                      R$ 614,20
-                    </span>
-                    <span className="text-[10px] text-[#006948] font-semibold">0 impulsos</span>
-                  </div>
-                </div>
-
-                {/* 2. Drogasil Jóquei */}
-                <div className="p-2.5 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-[#ecfdf5] text-[#006948] flex items-center justify-center shrink-0">
-                      <Check className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-xs text-[#0b1c30]">Drogasil Jóquei</span>
-                      <span className="text-[10px] text-[#565e74]">12/03 • 100% aderência</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end text-right">
-                    <span className="font-display font-bold text-xs text-[#0b1c30] tnum">
-                      R$ 138,40
-                    </span>
-                    <span className="text-[10px] text-[#006948] font-semibold">100% planejado</span>
-                  </div>
-                </div>
-
-                {/* 3. Carrefour Bairro */}
-                <div className="p-2.5 rounded-xl bg-[#ffdad6]/20 border border-[#ffdad6] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center shrink-0">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-xs text-[#0b1c30]">Carrefour Bairro</span>
-                      <span className="text-[10px] text-[#565e74]">04/03 • 68% aderência</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end text-right">
-                    <span className="font-display font-bold text-xs text-[#0b1c30] tnum">
-                      R$ 94,10
-                    </span>
-                    <span className="text-[10px] text-[#ba1a1a] font-bold">+R$ 32 impulso</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Lightbulb callout */}
-            <div className="p-3 bg-[#eff4ff] border border-[#dce9ff] rounded-xl flex items-start gap-2.5 text-xs text-[#565e74]">
-              <Lightbulb className="w-4 h-4 text-[#006194] shrink-0 mt-0.5" />
-              <span>
-                Ao planejar a lista antes de ir às compras, itens não essenciais foram reduzidos em{' '}
-                <strong className="text-[#0b1c30]">63%</strong> por Felipe e Genivânia.
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* MODAL: Ver Todas as Reconciliações                                        */}
-      {/* ========================================================================= */}
-      {showAllReconciliationsModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 border border-[#e5eeff] shadow-xl flex flex-col gap-4 animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-2 border-b border-[#f1f5f9]">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#006948]" />
-                <h3 className="font-display font-bold text-sm text-[#0b1c30]">
-                  Histórico Completo de Reconciliações
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowAllReconciliationsModal(false)}
-                className="text-[#565e74] hover:text-[#0b1c30]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
-              <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-[#0b1c30]">NFC-e Atacadão #92819</span>
-                  <div className="text-[10px] text-[#565e74]">24/03/2026 • 82% fidelidade</div>
-                </div>
-                <span className="font-bold text-[#0b1c30]">R$ 487,90</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-[#0b1c30]">Sam's Club #8812</span>
-                  <div className="text-[10px] text-[#565e74]">18/03/2026 • 91% fidelidade</div>
-                </div>
-                <span className="font-bold text-[#0b1c30]">R$ 614,20</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-[#0b1c30]">Drogasil Jóquei #4301</span>
-                  <div className="text-[10px] text-[#565e74]">12/03/2026 • 100% fidelidade</div>
-                </div>
-                <span className="font-bold text-[#0b1c30]">R$ 138,40</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-[#0b1c30]">Carrefour Bairro #1982</span>
-                  <div className="text-[10px] text-[#565e74]">04/03/2026 • 68% fidelidade</div>
-                </div>
-                <span className="font-bold text-[#0b1c30]">R$ 94,10</span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#f8f9ff] border border-[#e5eeff] flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-[#0b1c30]">Carvalho Super #7721</span>
-                  <div className="text-[10px] text-[#565e74]">26/02/2026 • 89% fidelidade</div>
-                </div>
-                <span className="font-bold text-[#0b1c30]">R$ 215,80</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowAllReconciliationsModal(false)}
-              className="w-full py-2.5 rounded-xl bg-[#006948] text-white text-xs font-bold transition-all hover:bg-[#00563b]"
-            >
-              Fechar Histórico
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* FOOTER BAR: Saúde Financeira do Mês & Copyright                           */}
-      {/* ========================================================================= */}
-      <footer className="w-full pt-4 mt-2 border-t border-[#e5eeff] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#565e74]">
+      <footer className="w-full pt-4 mt-2 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
         <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
           <div className="flex items-center gap-1.5 text-[#006948] font-bold">
             <CheckCircle2 className="w-4 h-4 text-[#006948]" />
-            <span>Saúde Financeira do Mês:</span>
+            <span>Auditoria Fiscal Casal Duarte:</span>
           </div>
-          <span className="px-2 py-0.5 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] text-[#006948] font-bold text-[11px]">
-            Equilibrada (78% da Meta)
+          <span className="text-slate-600">
+            {pendingItems.length} pendentes • {boughtItems.length} comprados
           </span>
-          <span className="text-[#565e74]">•</span>
-          <span className="text-[#565e74]">
-            Controle Conjunto 50/50{' '}
-            <strong className="text-[#006948]">R$ 14.850 / R$ 18.000</strong>
+          <span className="text-slate-300">•</span>
+          <span className="text-slate-600">
+            {availableSupermarketReceipts.length} comprovante(s) de supermercado conectado(s)
           </span>
         </div>
 
-        <div className="flex items-center gap-4 text-[11px]">
-          <span className="hover:text-[#0b1c30] cursor-pointer">Auditoria Fiscal</span>
-          <span className="hover:text-[#0b1c30] cursor-pointer">Gestão Conjunta 50/50</span>
-          <span className="hover:text-[#0b1c30] cursor-pointer">Exportar Relatório Mensal</span>
+        <div className="flex items-center gap-4 text-[11px] text-slate-400">
+          <span>© 2026 Duarte Finanças</span>
         </div>
       </footer>
-
-      <div className="text-center text-[10px] text-[#565e74] pb-4">
-        © 2026 Duarte Finanças
-      </div>
     </div>
   );
 };

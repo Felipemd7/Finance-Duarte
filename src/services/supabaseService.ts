@@ -9,6 +9,7 @@ export interface LoadedSupabaseData {
   shoppingList: ShoppingListItem[];
   spreadsheets: SpreadsheetRow[];
   purchaseItems: PurchaseItem[];
+  receipts: Receipt[];
 }
 
 export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
@@ -222,6 +223,35 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
       dataAdicao: s.data_adicao,
     }));
 
+    // 6.5 Receipts (Comprovantes Reais Escaneados via OCR IA)
+    const { data: recData, error: recErr } = await supabase
+      .from('receipts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (recErr) console.warn('[SupabaseService] Aviso ao carregar receipts:', recErr);
+
+    const mappedReceipts: Receipt[] = (recData || []).map((r) => {
+      let rawItens: any[] = [];
+      if (typeof r.dados_brutos === 'string') {
+        try { rawItens = JSON.parse(r.dados_brutos); } catch {}
+      } else if (Array.isArray(r.dados_brutos)) {
+        rawItens = r.dados_brutos;
+      }
+      return {
+        id: r.id,
+        data: r.data,
+        estabelecimento: r.estabelecimento_nome,
+        tipoEstabelecimento: r.estabelecimento_tipo || 'Supermercado',
+        valorTotal: Number(r.valor_total),
+        numeroCupom: r.numero_cupom || '',
+        status: (r.status as any) || 'Conciliado',
+        itens: rawItens.length > 0 ? rawItens : (itemsByTxId[r.transacao_id] || []),
+        imagemUrl: r.imagem_url,
+        transacaoId: r.transacao_id,
+      };
+    });
+
     // 7. Monthly Expectations & Spreadsheets
     const mesNomeMap: Record<string, string> = {
       '2026-01': 'Janeiro 2026',
@@ -232,6 +262,10 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
       '2026-06': 'Junho 2026',
       '2026-07': 'Julho 2026',
       '2026-08': 'Agosto 2026',
+      '2026-09': 'Setembro 2026',
+      '2026-10': 'Outubro 2026',
+      '2026-11': 'Novembro 2026',
+      '2026-12': 'Dezembro 2026',
     };
 
     // Calculate dynamic realities per month and subcategory
@@ -263,7 +297,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
       });
     });
 
-    console.log(`[SupabaseService] Sincronização concluída com sucesso: ${mappedTransactions.length} transações, ${mappedPurchaseItems.length} itens de compra, ${mappedGoals.length} metas.`);
+    console.log(`[SupabaseService] Sincronização concluída com sucesso: ${mappedTransactions.length} transações, ${mappedReceipts.length} comprovantes, ${mappedPurchaseItems.length} itens de compra, ${mappedGoals.length} metas.`);
 
     return {
       users: mappedUsers,
@@ -273,6 +307,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
       shoppingList: mappedShoppingList,
       spreadsheets: mappedSpreadsheets,
       purchaseItems: mappedPurchaseItems,
+      receipts: mappedReceipts,
     };
   } catch (err: any) {
     console.error('[SupabaseService] Erro ao buscar dados do Supabase:', err.message || err);
@@ -345,6 +380,16 @@ export async function toggleShoppingItemInCloud(id: string, comprado: boolean): 
   if (!isSupabaseConfigured) return false;
   try {
     const { error } = await supabase.from('shopping_list').update({ comprado }).eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function batchToggleShoppingItemsInCloud(ids: string[], comprado: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured || ids.length === 0) return false;
+  try {
+    const { error } = await supabase.from('shopping_list').update({ comprado }).in('id', ids);
     return !error;
   } catch {
     return false;
@@ -490,54 +535,138 @@ export async function deleteFuelLogFromCloud(id: string): Promise<boolean> {
 // COMPROVANTES FISCAIS & OCR IA (Persistência no Supabase)
 // ---------------------------------------------------------
 
+/**
+ * Normaliza data para o formato ISO 'yyyy-MM-dd'.
+ * Aceita: '07/09/2026', '07/09/2026 14:32', '2026-09-07', '2026-09-07T14:32:00'
+ */
+function normalizeDate(dateStr: string): string {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
+
+  // Formato ISO: 2026-09-07 ou 2026-09-07T...
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    return dateStr.slice(0, 10);
+  }
+
+  // Formato brasileiro: dd/mm/yyyy ou dd/mm/yyyy HH:mm
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
+    const [day, month, year] = dateStr.split('/');
+    return `${year}-${month}-${day.slice(0, 2)}`;
+  }
+
+  // Tentativa genérica
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  } catch {}
+
+  return new Date().toISOString().split('T')[0];
+}
+
+
+export async function saveScannedReceiptDraftToCloud(
+  receipt: Receipt
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const recDate = normalizeDate(receipt.data);
+    const { error } = await supabase.from('receipts').upsert(
+      {
+        id: receipt.id,
+        transacao_id: receipt.transacaoId || null,
+        estabelecimento_nome: receipt.estabelecimento,
+        estabelecimento_tipo: receipt.tipoEstabelecimento || 'Supermercado',
+        data: recDate,
+        valor_total: receipt.valorTotal,
+        numero_cupom: receipt.numeroCupom || null,
+        status: receipt.status || 'Pendente',
+        imagem_url: receipt.imagemUrl || null,
+        dados_brutos: JSON.stringify(receipt.itens || []),
+      },
+      { onConflict: 'id' }
+    );
+
+    if (error) {
+      console.warn('[SupabaseService] Erro ao salvar rascunho de comprovante:', error.message);
+      return false;
+    }
+    console.log('[SupabaseService] Rascunho de comprovante salvo no Supabase:', receipt.id);
+    return true;
+  } catch (err) {
+    console.error('[SupabaseService] Falha ao salvar rascunho de comprovante:', err);
+    return false;
+  }
+}
+
 export async function saveScannedReceiptToCloud(
   receipt: Receipt,
   transaction: Transaction
 ): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
-    // 1. Salvar Transação no Supabase
-    const { error: txErr } = await supabase.from('transactions').insert({
-      id: transaction.id,
-      usuario_id: transaction.pagoPor?.toLowerCase().includes('genivânia') ? 'usr-genivania' : 'usr-felipe',
-      data: transaction.data.slice(0, 10),
-      mes_referencia: transaction.data.slice(0, 7),
-      valor: transaction.valor,
-      tipo: 'despesa',
-      forma_pagamento: 'credito',
-      status: 'pago',
-      categoria_id: 'cat-variavel',
-      subcategoria_id:
-        receipt.tipoEstabelecimento === 'Farmácia'
-          ? 'sub-farmacia'
-          : receipt.tipoEstabelecimento === 'Posto de combustível'
-          ? 'sub-combustivel'
-          : 'sub-supermercado',
-      estabelecimento_nome: receipt.estabelecimento,
-      observacoes: transaction.observacoes || null,
-      comprovante_id: receipt.id,
-    });
+    // Normalizar datas antes de inserir
+    const txDate = normalizeDate(transaction.data);
+    const txMes = txDate.slice(0, 7);
+    const recDate = normalizeDate(receipt.data);
 
-    if (txErr) console.warn('[SupabaseService] Erro ao inserir transação do comprovante:', txErr);
+    // 1. Salvar ou Atualizar Transação no Supabase com Upsert
+    const { error: txErr } = await supabase.from('transactions').upsert(
+      {
+        id: transaction.id,
+        usuario_id: transaction.pagoPor?.toLowerCase().includes('genivânia') ? 'usr-genivania' : 'usr-felipe',
+        data: txDate,
+        mes_referencia: txMes,
+        valor: transaction.valor,
+        tipo: 'despesa',
+        forma_pagamento: 'credito',
+        status: 'pago',
+        categoria_id: 'cat-variavel',
+        subcategoria_id:
+          receipt.tipoEstabelecimento === 'Farmácia'
+            ? 'sub-farmacia'
+            : receipt.tipoEstabelecimento === 'Posto de combustível'
+            ? 'sub-combustivel'
+            : 'sub-supermercado',
+        estabelecimento_nome: receipt.estabelecimento,
+        observacoes: transaction.observacoes || null,
+        comprovante_id: receipt.id,
+      },
+      { onConflict: 'id' }
+    );
 
-    // 2. Salvar Comprovante
-    const { error: recErr } = await supabase.from('receipts').insert({
-      id: receipt.id,
-      transacao_id: transaction.id,
-      estabelecimento_nome: receipt.estabelecimento,
-      estabelecimento_tipo: receipt.tipoEstabelecimento,
-      data: receipt.data.slice(0, 10),
-      valor_total: receipt.valorTotal,
-      numero_cupom: receipt.numeroCupom || null,
-      status: 'Conciliado',
-      imagem_url: receipt.imagemUrl || null,
-      dados_brutos: JSON.stringify(receipt.itens || []),
-    });
+    if (txErr) {
+      console.error('[SupabaseService] Erro crítico ao inserir transação do comprovante:', txErr.message, txErr.details, txErr.hint);
+      return false; // Abortar se a transação principal falhou
+    }
 
-    if (recErr) console.warn('[SupabaseService] Erro ao inserir comprovante:', recErr);
+    console.log('[SupabaseService] Transação do comprovante salva via upsert:', transaction.id, 'data:', txDate);
 
-    // 3. Salvar itens detalhados da compra se houver
+    // 2. Salvar ou Atualizar Comprovante no Supabase com Upsert
+    const { error: recErr } = await supabase.from('receipts').upsert(
+      {
+        id: receipt.id,
+        transacao_id: transaction.id,
+        estabelecimento_nome: receipt.estabelecimento,
+        estabelecimento_tipo: receipt.tipoEstabelecimento,
+        data: recDate,
+        valor_total: receipt.valorTotal,
+        numero_cupom: receipt.numeroCupom || null,
+        status: 'Conciliado',
+        imagem_url: receipt.imagemUrl || null,
+        dados_brutos: JSON.stringify(receipt.itens || []),
+      },
+      { onConflict: 'id' }
+    );
+
+    if (recErr) {
+      console.warn('[SupabaseService] Erro ao salvar comprovante:', recErr.message, recErr.details);
+    } else {
+      console.log('[SupabaseService] Comprovante salvo/atualizado:', receipt.id);
+    }
+
+    // 3. Salvar itens detalhados da compra se houver (limpando anteriores para evitar duplicidade)
     if (receipt.itens && receipt.itens.length > 0) {
+      await supabase.from('purchase_items').delete().eq('transacao_id', transaction.id);
+
       const itemsToInsert = receipt.itens.map((it, idx) => ({
         id: `pi-${Date.now()}-${idx}`,
         transacao_id: transaction.id,
@@ -550,7 +679,8 @@ export async function saveScannedReceiptToCloud(
       }));
 
       const { error: itemsErr } = await supabase.from('purchase_items').insert(itemsToInsert);
-      if (itemsErr) console.warn('[SupabaseService] Erro ao inserir itens de compra:', itemsErr);
+      if (itemsErr) console.warn('[SupabaseService] Erro ao inserir itens de compra:', itemsErr.message);
+      else console.log('[SupabaseService]', itemsToInsert.length, 'itens de compra salvos.');
     }
 
     return true;
@@ -559,6 +689,32 @@ export async function saveScannedReceiptToCloud(
     return false;
   }
 }
+
+export async function deleteReceiptFromCloud(
+  receiptId: string,
+  transactionId?: string
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    // 1. Se houver transação vinculada, remover itens de compra e a transação
+    if (transactionId) {
+      await supabase.from('purchase_items').delete().eq('transacao_id', transactionId);
+      await supabase.from('transactions').delete().eq('id', transactionId);
+    }
+
+    // 2. Deletar comprovante
+    const { error } = await supabase.from('receipts').delete().eq('id', receiptId);
+    if (error) {
+      console.error('[SupabaseService] Erro ao excluir comprovante:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SupabaseService] Falha ao excluir comprovante:', err);
+    return false;
+  }
+}
+
 
 
 

@@ -40,6 +40,10 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
     const numVal = parseFloat(valor.replace(',', '.'));
     if (isNaN(numVal) || numVal <= 0) return;
 
+    const isCredit = formaPagamento.toLowerCase().includes('credito') ||
+                     formaPagamento.toLowerCase().includes('crédito') ||
+                     (formaPagamento.toLowerCase().includes('cartao') && !formaPagamento.toLowerCase().includes('debito'));
+
     const newTx: Transaction = {
       id: 'tx-' + Date.now(),
       usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
@@ -50,7 +54,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
       valor: numVal,
       formaPagamento,
-      status: 'pago',
+      status: isCredit ? 'pendente' : 'pago',
       pagoPor: responsavel,
       observacoes: observacoes.trim() || undefined,
     };
@@ -123,6 +127,30 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 onChange={(e) => setEstabelecimento(e.target.value)}
                 className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl focus:outline-hidden focus:border-[#006948]"
               />
+              {/* Quick suggestion pills matching mobile mockup */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pt-1.5 scrollbar-none">
+                {[
+                  { name: 'Atacadão', full: 'Atacadão S/A', cat: 'Variável', sub: 'Supermercado' },
+                  { name: 'Drogasil', full: 'Farmácia Drogasil', cat: 'Variável', sub: 'Farmácia' },
+                  { name: 'Shell', full: 'Posto Shell', cat: 'Variável', sub: 'Combustível' },
+                  { name: 'Pão de Açúcar', full: 'Pão de Açúcar', cat: 'Variável', sub: 'Supermercado' },
+                  { name: "Sam's Club", full: "Sam's Club", cat: 'Variável', sub: 'Supermercado' },
+                  { name: 'Mateus', full: 'Mix Mateus', cat: 'Variável', sub: 'Supermercado' },
+                ].map((sug) => (
+                  <button
+                    key={sug.name}
+                    type="button"
+                    onClick={() => {
+                      setEstabelecimento(sug.full);
+                      setCategoria(sug.cat as CategoryType);
+                      setSubcategoria(sug.sub);
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-[#eff4ff] hover:bg-[#dce9ff] text-[#006194] text-[10px] font-bold border border-[#dce9ff] whitespace-nowrap transition-colors cursor-pointer"
+                  >
+                    {sug.name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
@@ -186,6 +214,20 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               <option value="Boleto Bancário">Boleto Bancário</option>
               <option value="Dinheiro">Dinheiro Físico</option>
             </select>
+            <div className="mt-1.5">
+              {formaPagamento.toLowerCase().includes('credito') ||
+              formaPagamento.toLowerCase().includes('crédito') ||
+              (formaPagamento.toLowerCase().includes('cartao') &&
+                !formaPagamento.toLowerCase().includes('debito')) ? (
+                <div className="text-[10px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                  💳 <strong>Cartão de Crédito:</strong> Não entra como desembolso imediato de quem passou o cartão. O valor será quitado no fechamento futuro da fatura do casal.
+                </div>
+              ) : (
+                <div className="text-[10px] text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                  ✅ <strong>À Vista ({formaPagamento}):</strong> Entra como desembolso imediato de <strong>{responsavel}</strong> para o cálculo de acerto do rateio 50/50.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quem pagou */}

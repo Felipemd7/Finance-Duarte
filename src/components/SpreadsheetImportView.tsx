@@ -48,6 +48,10 @@ export const SpreadsheetImportView: React.FC<SpreadsheetImportViewProps> = ({
     'Junho 2026',
     'Julho 2026',
     'Agosto 2026',
+    'Setembro 2026',
+    'Outubro 2026',
+    'Novembro 2026',
+    'Dezembro 2026',
   ];
 
   const filteredRows = spreadsheets.filter((r) => {

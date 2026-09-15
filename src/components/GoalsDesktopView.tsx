@@ -541,19 +541,14 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   };
 
   return (
-    <div id="metas-desktop-view" className="hidden md:block w-full max-w-7xl mx-auto pb-12">
+    <div id="metas-desktop-view" className="w-full max-w-7xl mx-auto pb-12">
       {/* ========================================================================= */}
       {/* TOP HEADER: Breadcrumbs, Title, Rateio Card & Actions                     */}
       {/* ========================================================================= */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-[#e5eeff]">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-xs font-bold border border-[#a7f3d0]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a] animate-pulse" />
-              Sync Cloud 24/7 Ativo
-            </span>
-            <span className="text-xs text-[#565e74]">|</span>
-            <span className="text-xs text-[#565e74] font-medium">Exercício Financeiro Março 2026</span>
+            <span className="text-xs text-[#565e74] font-medium">Exercício Financeiro {selectedMonth}</span>
           </div>
           <h1 className="font-display font-bold text-2xl lg:text-3xl text-[#0b1c30] tracking-tight">
             Metas, Veículo & Automações
@@ -590,7 +585,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
             </div>
             <div className="text-left pr-2">
               <span className="text-xs font-bold text-[#0b1c30] block">
-                Gestão Conjunta 50/50
+                Casal Duarte
               </span>
               <span className="text-[10px] text-[#006948] font-medium block">
                 Felipe & Genivânia
@@ -781,7 +776,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           </div>
 
           <div className="px-3 py-1.5 rounded-full bg-[#f1f5f9] text-[#565e74] text-xs font-semibold border border-[#e2e8f0]">
-            Veículo: Renault Duster 2016 1.6 • Placa: DUA-2026
+            Veículo: Jeep Compass Longitude Turbo • Placa: DUA-2026
           </div>
         </div>
 
@@ -895,7 +890,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           onUpdateFuelLog={handleUpdateFuelLog}
           onDeleteFuelLog={handleDeleteFuelLog}
           onShowToast={onShowToast}
-          veiculoInfo="Renault Duster 2016 1.6 • Placa DUA-2026"
+          veiculoInfo="Jeep Compass Longitude Turbo • Placa DUA-2026"
           custosFixosRateadosKm={0.53}
         />
       </div>
@@ -906,37 +901,13 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
       <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_8px_rgba(11,28,48,0.03)] flex items-center justify-between flex-wrap gap-3 text-xs text-[#565e74]">
         <div className="flex items-center gap-2 flex-wrap">
           <ShieldCheck className="w-4 h-4 text-[#006948]" />
-          <span className="font-bold text-[#0b1c30]">Saúde Financeira do Mês:</span>
-          <span className="px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#006948] font-bold text-[11px]">
-            Equilibrada (78% da Meta)
-          </span>
-          <span className="text-[#565e74] ml-2">
-            Controle Conjunto 50/50: <strong className="text-[#0b1c30]">R$ 14.850 / R$ 18.000</strong>
+          <span className="font-bold text-[#0b1c30]">Planejamento Financeiro:</span>
+          <span className="text-[#565e74]">
+            Felipe Duarte & Genivânia Duarte
           </span>
         </div>
 
         <div className="flex items-center gap-4 text-[11px]">
-          <button
-            onClick={() => onShowToast('Auditoria Fiscal: 100% dos comprovantes conciliados no exercício.')}
-            className="hover:text-[#006948] hover:underline cursor-pointer"
-          >
-            Auditoria Fiscal
-          </button>
-          <span>•</span>
-          <button
-            onClick={() => onShowToast('Parceria 50/50: Orçamento 100% compartilhado entre Felipe e Genivânia.')}
-            className="hover:text-[#006948] hover:underline cursor-pointer"
-          >
-            Parceria 50/50
-          </button>
-          <span>•</span>
-          <button
-            onClick={() => onShowToast('Exportação de Relatório consolidado em PDF/XLSX gerado!')}
-            className="hover:text-[#006948] hover:underline cursor-pointer"
-          >
-            Exportar Relatório Mensal
-          </button>
-          <span>•</span>
           <span>© 2026 Duarte Finanças</span>
         </div>
       </div>
@@ -1432,7 +1403,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                     Novo Custo do Veículo
                   </h3>
                   <span className="text-xs text-[#565e74]">
-                    Renault Duster 2016 1.6
+                    Jeep Compass Longitude Turbo
                   </span>
                 </div>
               </div>

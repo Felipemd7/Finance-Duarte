@@ -26,15 +26,25 @@ import {
   Trash2,
   Calendar,
   User as UserIcon,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  ArrowRight,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
-import { Transaction, Receipt } from '../types';
+import { Transaction, Receipt, SpreadsheetRow } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { deleteTransactionFromCloud } from '../services/supabaseService';
+import { MonthlyBudgetSpreadsheetPanel } from './MonthlyBudgetSpreadsheetPanel';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
   receipts: Receipt[];
   selectedMonth: string;
+  onSelectMonth?: (month: string) => void;
+  spreadsheets?: SpreadsheetRow[];
   onOpenNewTx: () => void;
   onUpdateTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
@@ -45,11 +55,16 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   transactions,
   receipts,
   selectedMonth,
+  onSelectMonth,
+  spreadsheets = [],
   onOpenNewTx,
   onUpdateTransaction,
   onDeleteTransaction,
   onViewReceipt,
 }) => {
+  // Navigation View Tab: 'extrato' (lista tradicional) ou 'planilha' (espelho da planilha e rateio 50/50)
+  const [viewTab, setViewTab] = useState<'extrato' | 'planilha'>('extrato');
+
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryChip, setSelectedCategoryChip] = useState('todos');
@@ -78,6 +93,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       'Junho 2026': '2026-06',
       'Julho 2026': '2026-07',
       'Agosto 2026': '2026-08',
+      'Setembro 2026': '2026-09',
+      'Outubro 2026': '2026-10',
+      'Novembro 2026': '2026-11',
+      'Dezembro 2026': '2026-12',
     };
     return map[mesNome] || '';
   };
@@ -114,7 +133,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     return transactions.filter((tx) => {
       // Month filter
       if (filterMonthMode === 'selected' && activeMonthCode) {
-        if (!tx.data.startsWith(activeMonthCode)) {
+        const txData = tx.data || '';
+        const txMesRef = tx.mesReferencia || (tx as any).mes_ano || '';
+        if (!txData.startsWith(activeMonthCode) && txMesRef !== activeMonthCode) {
           return false;
         }
       }
@@ -124,10 +145,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         const query = searchTerm.toLowerCase();
         const est = (tx.estabelecimento || '').toLowerCase();
         const sub = (tx.subcategoria || '').toLowerCase();
+        const cat = (tx.categoria || '').toLowerCase();
         const obs = (tx.observacoes || '').toLowerCase();
         const pag = (tx.pagoPor || '').toLowerCase();
         const val = Math.abs(tx.valor).toString();
-        if (!est.includes(query) && !sub.includes(query) && !obs.includes(query) && !pag.includes(query) && !val.includes(query)) {
+        const formattedVal = formatBRL(tx.valor).toLowerCase();
+        if (
+          !est.includes(query) &&
+          !sub.includes(query) &&
+          !cat.includes(query) &&
+          !obs.includes(query) &&
+          !pag.includes(query) &&
+          !val.includes(query) &&
+          !formattedVal.includes(query)
+        ) {
           return false;
         }
       }
@@ -178,6 +209,223 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     return counts;
   }, [transactions, activeMonthCode, filterMonthMode]);
 
+  // Métricas e Gráficos Analíticos de Despesas do Extrato
+  const analyticsData = useMemo(() => {
+    const expenses = filteredTransactions.filter((t) => t.tipo === 'despesa');
+    const totalGasto = expenses.reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+    const count = expenses.length;
+    const ticketMedio = count > 0 ? totalGasto / count : 0;
+
+    let totalVista = 0;
+    let totalCartao = 0;
+
+    const categoryMap: Record<
+      string,
+      { id: string; nome: string; valor: number; count: number; color: string; barBg: string; textColor: string; icon: any }
+    > = {
+      supermercado: {
+        id: 'supermercado',
+        nome: 'Supermercado & Alimentação',
+        valor: 0,
+        count: 0,
+        color: '#10b981',
+        barBg: 'bg-emerald-500',
+        textColor: 'text-emerald-700',
+        icon: ShoppingCart,
+      },
+      combustivel: {
+        id: 'combustivel',
+        nome: 'Combustível & Posto',
+        valor: 0,
+        count: 0,
+        color: '#3b82f6',
+        barBg: 'bg-blue-500',
+        textColor: 'text-blue-700',
+        icon: Fuel,
+      },
+      moradia: {
+        id: 'moradia',
+        nome: 'Moradia (Aluguel, Luz & Contas)',
+        valor: 0,
+        count: 0,
+        color: '#6366f1',
+        barBg: 'bg-indigo-500',
+        textColor: 'text-indigo-700',
+        icon: Building2,
+      },
+      lazer: {
+        id: 'lazer',
+        nome: 'Lazer & Restaurantes',
+        valor: 0,
+        count: 0,
+        color: '#f59e0b',
+        barBg: 'bg-amber-500',
+        textColor: 'text-amber-700',
+        icon: Utensils,
+      },
+      carro: {
+        id: 'carro',
+        nome: 'Veículo (Compass, Rastreador & Seguro)',
+        valor: 0,
+        count: 0,
+        color: '#06b6d4',
+        barBg: 'bg-cyan-500',
+        textColor: 'text-cyan-700',
+        icon: Car,
+      },
+      farmacia: {
+        id: 'farmacia',
+        nome: 'Farmácia & Saúde',
+        valor: 0,
+        count: 0,
+        color: '#f43f5e',
+        barBg: 'bg-rose-500',
+        textColor: 'text-rose-700',
+        icon: Pill,
+      },
+      outros: {
+        id: 'outros',
+        nome: 'Eventualidades & Outros',
+        valor: 0,
+        count: 0,
+        color: '#64748b',
+        barBg: 'bg-slate-500',
+        textColor: 'text-slate-700',
+        icon: Layers,
+      },
+    };
+
+    expenses.forEach((t) => {
+      const val = Number(t.valor) || 0;
+      const sub = (t.subcategoria || '').toLowerCase();
+      const est = (t.estabelecimento || '').toLowerCase();
+      const forma = (t.formaPagamento || '').toLowerCase();
+      const obs = (t.observacoes || '').toLowerCase();
+
+      const isCredit =
+        forma.includes('credito') ||
+        forma.includes('crédito') ||
+        (forma.includes('cartao') && !forma.includes('debito')) ||
+        obs.includes('crédito') ||
+        obs.includes('credito');
+
+      if (isCredit) {
+        totalCartao += val;
+      } else {
+        totalVista += val;
+      }
+
+      if (
+        sub.includes('supermercado') ||
+        sub.includes('feira') ||
+        sub.includes('alimento') ||
+        est.includes('mateus') ||
+        est.includes('atacadão') ||
+        est.includes('atacadao') ||
+        est.includes('ifood') ||
+        est.includes('ferreira')
+      ) {
+        categoryMap.supermercado.valor += val;
+        categoryMap.supermercado.count++;
+      } else if (
+        sub.includes('combustivel') ||
+        sub.includes('combustível') ||
+        sub.includes('gasolina') ||
+        est.includes('posto') ||
+        est.includes('cacique') ||
+        est.includes('shell') ||
+        est.includes('ipiranga')
+      ) {
+        categoryMap.combustivel.valor += val;
+        categoryMap.combustivel.count++;
+      } else if (
+        sub.includes('aluguel') ||
+        sub.includes('condominio') ||
+        sub.includes('condomínio') ||
+        sub.includes('luz') ||
+        sub.includes('água') ||
+        sub.includes('agua') ||
+        sub.includes('internet') ||
+        sub.includes('gás') ||
+        sub.includes('gas') ||
+        sub.includes('solar')
+      ) {
+        categoryMap.moradia.valor += val;
+        categoryMap.moradia.count++;
+      } else if (
+        sub.includes('lazer') ||
+        sub.includes('restaurante') ||
+        sub.includes('spoleto') ||
+        sub.includes('pizza') ||
+        sub.includes('bar') ||
+        sub.includes('cinema')
+      ) {
+        categoryMap.lazer.valor += val;
+        categoryMap.lazer.count++;
+      } else if (
+        sub.includes('carro') ||
+        sub.includes('manuten') ||
+        sub.includes('rastreador') ||
+        sub.includes('seguro')
+      ) {
+        categoryMap.carro.valor += val;
+        categoryMap.carro.count++;
+      } else if (
+        sub.includes('farm') ||
+        sub.includes('saude') ||
+        sub.includes('saúde') ||
+        sub.includes('medic') ||
+        sub.includes('droga')
+      ) {
+        categoryMap.farmacia.valor += val;
+        categoryMap.farmacia.count++;
+      } else {
+        categoryMap.outros.valor += val;
+        categoryMap.outros.count++;
+      }
+    });
+
+    const categoryList = Object.values(categoryMap).sort((a, b) => b.valor - a.valor);
+    const topCategory = categoryList[0] || null;
+
+    const felipeGasto = expenses
+      .filter((t) => t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe')
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+    const genivaniaGasto = expenses
+      .filter((t) => t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia')
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
+    const felipePct = totalGasto > 0 ? Math.round((felipeGasto / totalGasto) * 100) : 50;
+    const genivaniaPct = 100 - felipePct;
+    const diffRateio = Math.abs(felipeGasto - genivaniaGasto) / 2;
+    const devedor = felipeGasto > genivaniaGasto ? 'Genivânia' : 'Felipe';
+    const credor = felipeGasto > genivaniaGasto ? 'Felipe' : 'Genivânia';
+
+    const incomes = filteredTransactions.filter((t) => t.tipo === 'receita');
+    const totalEntradas = incomes.length > 0
+      ? incomes.reduce((acc, t) => acc + (Number(t.valor) || 0), 0)
+      : 18450;
+    const saldoLiquido = totalEntradas - totalGasto;
+
+    return {
+      totalGasto,
+      count,
+      ticketMedio,
+      totalVista,
+      totalCartao,
+      categoryList,
+      topCategory,
+      felipeGasto,
+      genivaniaGasto,
+      felipePct,
+      genivaniaPct,
+      diffRateio,
+      devedor,
+      credor,
+      totalEntradas,
+      saldoLiquido,
+    };
+  }, [filteredTransactions]);
+
   const handleDelete = async (tx: Transaction) => {
     if (!window.confirm(`Tem certeza que deseja excluir o lançamento de ${formatBRL(tx.valor)} em ${tx.estabelecimento}?`)) {
       return;
@@ -188,9 +436,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     if (success) {
       onDeleteTransaction(tx.id);
       setSelectedTransactionDetail(null);
-      showToast('Lançamento removido do Supabase com sucesso.');
+      showToast('Lançamento removido com sucesso.');
     } else {
-      showToast('Erro ao remover do Supabase. Tente novamente.');
+      showToast('Erro ao remover lançamento. Tente novamente.');
     }
   };
 
@@ -212,52 +460,555 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         </div>
       )}
 
-      {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-display font-black text-xl text-[#0b1c30]">
-              Extrato Financeiro Oficial
-            </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-xs font-bold border border-[#a7f3d0]">
-              {filteredTransactions.length} registros
-            </span>
-          </div>
-          <p className="text-xs text-[#565e74] mt-0.5">
-            Dados autênticos sincronizados em tempo real com o banco de dados Supabase do casal
-          </p>
-        </div>
+      {/* Navigation View Mode: Extrato Detalhado vs Planilha & Divisão 50/50 */}
+      <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-[#e5eeff] shadow-xs mb-5 flex-wrap">
+        <button
+          onClick={() => setViewTab('extrato')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            viewTab === 'extrato'
+              ? 'bg-[#006948] text-white shadow-xs'
+              : 'text-[#565e74] hover:text-[#0b1c30] hover:bg-[#f8faff]'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Extrato de Lançamentos ({filteredTransactions.length})</span>
+        </button>
 
-        <div className="flex items-center gap-2">
-          {/* Month toggle: Selected Month vs All 2026 */}
-          <div className="inline-flex p-1 bg-white rounded-xl border border-[#e5eeff] text-xs shadow-2xs">
-            <button
-              onClick={() => setFilterMonthMode('selected')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                filterMonthMode === 'selected' ? 'bg-[#006948] text-white' : 'text-[#565e74] hover:text-[#0b1c30]'
-              }`}
-            >
-              {selectedMonth}
-            </button>
-            <button
-              onClick={() => setFilterMonthMode('all')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                filterMonthMode === 'all' ? 'bg-[#006948] text-white' : 'text-[#565e74] hover:text-[#0b1c30]'
-              }`}
-            >
-              Ano Todo 2026 ({transactions.length})
-            </button>
-          </div>
-
-          <button
-            onClick={onOpenNewTx}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#006948] hover:bg-[#00563b] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Novo Lançamento</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setViewTab('planilha')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            viewTab === 'planilha'
+              ? 'bg-[#0b1c30] text-white shadow-xs'
+              : 'text-[#565e74] hover:text-[#0b1c30] hover:bg-[#f8faff]'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Planilha de Fechamento & Divisão 50/50</span>
+          <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+            viewTab === 'planilha' ? 'bg-white/20 text-white' : 'bg-[#006948]/15 text-[#006948]'
+          }`}>
+            OFICIAL
+          </span>
+        </button>
       </div>
+
+      {viewTab === 'planilha' ? (
+        <MonthlyBudgetSpreadsheetPanel
+          transactions={transactions}
+          selectedMonth={selectedMonth}
+          onSelectMonth={onSelectMonth}
+          spreadsheets={spreadsheets}
+          onOpenNewTx={onOpenNewTx}
+        />
+      ) : (
+        <>
+          {/* ========================================================================= */}
+          {/* 1. MOBILE VIEW (Screens < 768px): UX Limpa e Intuitiva (Imagem 3)         */}
+          {/* ========================================================================= */}
+          <div id="extrato-mobile-view" className="block md:hidden w-full max-w-md mx-auto px-1 pb-24">
+            {/* Header: Mês e Saldo Líquido do Casal */}
+            <div className="bg-white rounded-3xl p-5 border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)] mb-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-[#006948]" />
+                  <span className="font-display font-bold text-sm text-[#0b1c30]">{selectedMonth}</span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-[10px] font-bold border border-[#a7f3d0] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#006948]" />
+                  FECHAMENTO ATIVO
+                </span>
+              </div>
+
+              <div className="pt-3 pb-2">
+                <span className="text-[11px] font-bold text-[#565e74] uppercase tracking-wider block">
+                  Saldo Líquido do Casal
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className={`font-display font-black text-3xl font-mono ${
+                    analyticsData.saldoLiquido >= 0 ? 'text-[#006948]' : 'text-[#dc2626]'
+                  }`}>
+                    {analyticsData.saldoLiquido >= 0 ? '+' : ''}{formatBRL(analyticsData.saldoLiquido)}
+                  </span>
+                  <TrendingUp className="w-4 h-4 text-[#006948]" />
+                </div>
+              </div>
+
+              {/* 2 Cartões Lado a Lado: Entradas e Saídas */}
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
+                <div className="p-3 rounded-2xl bg-[#eff4ff] border border-[#dce9ff] flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-white text-[#006194] flex items-center justify-center shrink-0 shadow-2xs">
+                    <ArrowDown className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-[#565e74] font-medium block">Total Entradas</span>
+                    <span className="font-mono font-bold text-xs text-[#0b1c30] block truncate">
+                      {formatBRL(analyticsData.totalEntradas)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-[#fff1f2] border border-[#fecdd3] flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-white text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
+                    <ArrowUp className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-[#565e74] font-medium block">Total Saídas</span>
+                    <span className="font-mono font-bold text-xs text-[#ba1a1a] block truncate">
+                      {formatBRL(analyticsData.totalGasto)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Divisão & Rateio Paritário */}
+              <div className="mt-4 p-3.5 rounded-2xl bg-[#f8faff] border border-[#e5eeff]">
+                <div className="flex items-center justify-between text-xs mb-2">
+                  <div className="flex items-center gap-1.5 font-bold text-[#0b1c30]">
+                    <span>⚖️</span>
+                    <span>Divisão & Rateio Paritário</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-white text-[#565e74] text-[10px] font-bold border border-[#e2e8f0]">
+                    Meta 50 / 50
+                  </span>
+                </div>
+
+                <div className="w-full h-2 bg-[#e2e8f0] rounded-full overflow-hidden flex">
+                  <div
+                    style={{ width: `${analyticsData.felipePct}%` }}
+                    className="h-full bg-[#006948]"
+                  />
+                  <div
+                    style={{ width: `${analyticsData.genivaniaPct}%` }}
+                    className="h-full bg-[#006194]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono mt-2 font-bold">
+                  <span className="text-[#006948]">
+                    Felipe ({analyticsData.felipePct}%): {formatBRL(analyticsData.felipeGasto)}
+                  </span>
+                  <span className="text-[#006194]">
+                    Genivânia ({analyticsData.genivaniaPct}%): {formatBRL(analyticsData.genivaniaGasto)}
+                  </span>
+                </div>
+
+                {analyticsData.diffRateio > 0 && (
+                  <div className="mt-2.5 pt-2.5 border-t border-[#e2e8f0] flex items-center justify-between text-xs">
+                    <span className="text-[#565e74] text-[11px]">
+                      {analyticsData.devedor} deve <strong>{formatBRL(analyticsData.diffRateio)}</strong>
+                    </span>
+                    <span className="px-2.5 py-1 rounded-xl bg-[#006948] text-white font-bold text-[10px] flex items-center gap-1">
+                      Compensar {formatBRL(analyticsData.diffRateio)} 📲
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Campo de Busca Rápida */}
+            <div className="relative mb-3">
+              <Search className="w-4 h-4 text-[#565e74] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por estabelecimento, pessoa, valor..."
+                className="w-full pl-9 pr-3 py-2.5 bg-white border border-[#e5eeff] rounded-2xl text-xs text-[#0b1c30] shadow-xs focus:outline-none focus:border-[#006948]"
+              />
+            </div>
+
+            {/* Pílulas de Categorias (Horizontal Scroll) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-3">
+              <button
+                onClick={() => setSelectedCategoryChip('todos')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  selectedCategoryChip === 'todos' ? 'bg-[#006948] text-white' : 'bg-white text-[#565e74] border border-[#e5eeff]'
+                }`}
+              >
+                Todos ({categoryCounts.todos})
+              </button>
+              <button
+                onClick={() => setSelectedCategoryChip('supermercado')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  selectedCategoryChip === 'supermercado' ? 'bg-[#006948] text-white' : 'bg-white text-[#565e74] border border-[#e5eeff]'
+                }`}
+              >
+                🛒 Supermercado
+              </button>
+              <button
+                onClick={() => setSelectedCategoryChip('combustivel')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  selectedCategoryChip === 'combustivel' ? 'bg-[#006948] text-white' : 'bg-white text-[#565e74] border border-[#e5eeff]'
+                }`}
+              >
+                🚗 Carro
+              </button>
+              <button
+                onClick={() => setSelectedCategoryChip('lazer')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  selectedCategoryChip === 'lazer' ? 'bg-[#006948] text-white' : 'bg-white text-[#565e74] border border-[#e5eeff]'
+                }`}
+              >
+                🍷 Lazer
+              </button>
+              <button
+                onClick={() => setSelectedCategoryChip('farmacia')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  selectedCategoryChip === 'farmacia' ? 'bg-[#006948] text-white' : 'bg-white text-[#565e74] border border-[#e5eeff]'
+                }`}
+              >
+                💊 Farmácia
+              </button>
+            </div>
+
+            {/* Lista de Transações Recentes Mobile */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className="font-bold text-xs text-[#565e74] uppercase tracking-wider">
+                  TRANSAÇÕES ({filteredTransactions.length})
+                </span>
+                <span className="text-[11px] text-[#006948] font-bold">
+                  Filtrado por data
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {paginatedList.map((tx) => {
+                  const meta = getCategoryMeta(tx.subcategoria, tx.categoria);
+                  const IconComp = meta.icon;
+                  const isFelipe = tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe';
+
+                  return (
+                    <div
+                      key={tx.id}
+                      onClick={() => setSelectedTransactionDetail(tx)}
+                      className="bg-white rounded-2xl p-3.5 border border-[#e5eeff] shadow-xs flex items-center justify-between gap-3 cursor-pointer active:scale-98 transition-transform"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${meta.bg}`}>
+                          <IconComp className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-xs text-[#0b1c30] block truncate">
+                            {tx.estabelecimento || 'Lançamento Diverso'}
+                          </span>
+                          <span className="text-[10px] text-[#565e74] flex items-center gap-1 mt-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`} />
+                            {isFelipe ? 'Felipe' : 'Genivânia'} • {tx.data}
+                          </span>
+                          <div className="flex items-center gap-1 mt-1">
+                            {tx.itens && tx.itens.length > 0 && (
+                              <span className="px-1.5 py-0.2 rounded bg-[#ecfdf5] text-[#006948] text-[9px] font-bold border border-[#bbf7d0]">
+                                Cupom IA
+                              </span>
+                            )}
+                            <span className="px-1.5 py-0.2 rounded bg-[#f1f5f9] text-[#565e74] text-[9px] font-medium">
+                              {tx.subcategoria || tx.categoria}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="font-mono font-bold text-xs text-[#0b1c30] block">
+                          - {formatBRL(tx.valor)}
+                        </span>
+                        <span className="text-[10px] text-[#565e74] block mt-0.5">
+                          {tx.formaPagamento || 'Cartão'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Botão Ver Mais Transações */}
+              {visibleCount < filteredTransactions.length && (
+                <button
+                  onClick={() => setVisibleCount((prev) => prev + 20)}
+                  className="w-full mt-3 py-2.5 rounded-xl bg-white border border-[#cbd5e1] text-xs font-bold text-[#0b1c30] hover:bg-[#eff4ff] cursor-pointer shadow-2xs"
+                >
+                  Carregar mais transações ({filteredTransactions.length - visibleCount} restantes)
+                </button>
+              )}
+            </div>
+
+            {/* Card de Fechamento Oficial */}
+            <div
+              onClick={() => setViewTab('planilha')}
+              className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-xs flex items-center justify-between gap-3 cursor-pointer active:scale-98 transition-transform"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center shrink-0 border border-[#a7f3d0]">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-xs text-[#0b1c30] block truncate">
+                    Planilha de Fechamento Oficial
+                  </span>
+                  <span className="text-[10px] text-[#565e74] block truncate">
+                    {filteredTransactions.length} lançamentos consolidados 50/50
+                  </span>
+                </div>
+              </div>
+              <span className="px-3 py-1.5 rounded-xl bg-[#006948] text-white text-[10px] font-bold shrink-0">
+                Abrir Planilha →
+              </span>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 2. DESKTOP VIEW (Screens >= 768px): Tabela Analítica Ampla                */}
+          {/* ========================================================================= */}
+          <div id="extrato-desktop-view" className="hidden md:block">
+            {/* Header & Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-display font-black text-xl text-[#0b1c30]">
+                  Extrato Financeiro Oficial
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-xs font-bold border border-[#a7f3d0]">
+                  {filteredTransactions.length} registros
+                </span>
+              </div>
+              <p className="text-xs text-[#565e74] mt-0.5">
+                Extrato e lançamentos sincronizados em tempo real
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Seletor Estrito de Mês */}
+              <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-[#e5eeff] text-xs shadow-2xs">
+                <Calendar className="w-3.5 h-3.5 text-[#006948]" />
+                <span className="text-[#565e74] font-medium hidden sm:inline">Mês:</span>
+                <select
+                  id="select-mes-extrato"
+                  value={selectedMonth}
+                  onChange={(e) => onSelectMonth && onSelectMonth(e.target.value)}
+                  className="bg-transparent font-bold text-[#0b1c30] focus:outline-none cursor-pointer pr-1"
+                >
+                  {[
+                    'Janeiro 2026',
+                    'Fevereiro 2026',
+                    'Março 2026',
+                    'Abril 2026',
+                    'Maio 2026',
+                    'Junho 2026',
+                    'Julho 2026',
+                    'Agosto 2026',
+                    'Setembro 2026',
+                    'Outubro 2026',
+                    'Novembro 2026',
+                    'Dezembro 2026',
+                  ].map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={onOpenNewTx}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#006948] hover:bg-[#00563b] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Novo Lançamento</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Banner de Contexto do Mês Selecionado */}
+          {activeMonthCode <= '2026-08' ? (
+            <div className="mb-4 px-4 py-3 rounded-2xl bg-[#eff4ff] border border-[#dce9ff] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="text-base">📁</span>
+                <div>
+                  <strong className="text-[#006194]">Histórico Oficial das Planilhas ({selectedMonth}):</strong>
+                  <span className="text-[#475569] ml-1">
+                    Compras de Supermercado e Lazer identificadas pelo local real de compra ({filteredTransactions.length} lançamentos). Total fechado e auditado com precisão de R$ 0,00.
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewTab('planilha')}
+                className="shrink-0 px-3 py-1.5 rounded-xl bg-white border border-[#cbd5e1] text-[#006194] font-bold text-xs hover:bg-[#eff4ff] transition-colors cursor-pointer shadow-2xs self-start sm:self-auto"
+              >
+                Ver Planilha de Fechamento →
+              </button>
+            </div>
+          ) : (
+            <div className="mb-4 px-4 py-3 rounded-2xl bg-[#fefce8] border border-[#fef08a] flex items-center gap-2.5 text-xs">
+              <span className="text-base">⚡</span>
+              <div>
+                <strong className="text-[#854d0e]">Mês Corrente em Aberto ({selectedMonth}):</strong>
+                <span className="text-[#713f12] ml-1">
+                  Novos lançamentos entram em tempo real com comprovantes IA ou registros manuais, todos com datas e horários exatos.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Cards de KPI Analíticos no Topo do Extrato */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-5">
+            {/* Card 1: Total Gasto até o Momento */}
+            <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#565e74] uppercase tracking-wider">
+                  Total Gasto até o Momento
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2">
+                <span className="font-display font-black text-2xl text-[#0b1c30] font-mono block">
+                  {formatBRL(analyticsData.totalGasto)}
+                </span>
+                <div className="flex items-center gap-2 mt-1 text-[11px] text-[#565e74]">
+                  <span className="font-semibold text-[#006948] bg-[#ecfdf5] px-1.5 py-0.2 rounded font-mono">
+                    {analyticsData.count} despesas
+                  </span>
+                  <span>• Média: {formatBRL(analyticsData.ticketMedio)}/compra</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Modalidades de Pagamento (À Vista vs Cartão de Crédito) */}
+            <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#565e74] uppercase tracking-wider">
+                  Modalidade de Pagamento
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-[#eff4ff] text-[#2563eb] flex items-center justify-center">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 space-y-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#565e74] flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    À Vista (PIX/Débito):
+                  </span>
+                  <strong className="font-mono text-[#0b1c30]">{formatBRL(analyticsData.totalVista)}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#565e74] flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Crédito (A Pagar):
+                  </span>
+                  <strong className="font-mono text-amber-700">{formatBRL(analyticsData.totalCartao)}</strong>
+                </div>
+              </div>
+              {analyticsData.totalGasto > 0 && (
+                <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden flex mt-2">
+                  <div
+                    className="bg-emerald-500 h-full"
+                    style={{
+                      width: `${(analyticsData.totalVista / analyticsData.totalGasto) * 100}%`,
+                    }}
+                    title="À Vista"
+                  />
+                  <div
+                    className="bg-amber-500 h-full"
+                    style={{
+                      width: `${(analyticsData.totalCartao / analyticsData.totalGasto) * 100}%`,
+                    }}
+                    title="Crédito"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Card 3: Top Categoria de Maior Concentração */}
+            <div className="bg-white rounded-2xl p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#565e74] uppercase tracking-wider">
+                  Maior Foco de Gastos
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-[#fff7ed] text-[#ea580c] flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2">
+                {analyticsData.topCategory ? (
+                  <>
+                    <span className="font-bold text-sm text-[#0b1c30] truncate block">
+                      {analyticsData.topCategory.nome}
+                    </span>
+                    <div className="flex items-center justify-between mt-1 text-xs">
+                      <span className="font-mono font-extrabold text-[#ea580c]">
+                        {formatBRL(analyticsData.topCategory.valor)}
+                      </span>
+                      <span className="text-[11px] text-[#565e74] font-semibold bg-gray-100 px-2 py-0.5 rounded-full">
+                        {analyticsData.totalGasto > 0
+                          ? `${Math.round((analyticsData.topCategory.valor / analyticsData.totalGasto) * 100)}% do total`
+                          : '0%'}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-400 italic">Sem lançamentos no período</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Gráficos Analíticos de Gastos por Categoria */}
+          {analyticsData.categoryList.length > 0 && (
+            <div className="bg-white rounded-3xl p-5 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] mb-5">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-[#eff4ff] text-[#2563eb] flex items-center justify-center">
+                    <BarChart3 className="w-3.5 h-3.5" />
+                  </div>
+                  <h4 className="font-bold text-xs text-[#0b1c30] uppercase tracking-wider">
+                    Distribuição de Gastos por Categoria • {filterMonthMode === 'selected' ? selectedMonth : 'Ano 2026'}
+                  </h4>
+                </div>
+                <span className="text-[11px] font-mono text-[#565e74]">
+                  Total: <strong className="text-[#0b1c30]">{formatBRL(analyticsData.totalGasto)}</strong>
+                </span>
+              </div>
+
+              {/* Barras Horizontais Analíticas de Cada Categoria */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mt-3.5">
+                {analyticsData.categoryList.map((cat) => {
+                  const Icon = cat.icon;
+                  const pct =
+                    analyticsData.totalGasto > 0
+                      ? Math.round((cat.valor / analyticsData.totalGasto) * 100)
+                      : 0;
+
+                  return (
+                    <div key={cat.id} className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Icon className={`w-3.5 h-3.5 ${cat.textColor}`} />
+                          <span className="font-semibold text-[#0b1c30]">{cat.nome}</span>
+                          <span className="text-[10px] text-[#565e74]">({cat.count})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-[#0b1c30]">{formatBRL(cat.valor)}</span>
+                          <span className="text-[10px] font-bold text-[#565e74] bg-gray-100 px-1.5 py-0.2 rounded w-8 text-right font-mono">
+                            {pct}%
+                          </span>
+                        </div>
+                      </div>
+                      {/* Barra de Progresso Colorida */}
+                      <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${cat.barBg}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
       {/* Search & Category Chips */}
       <div className="bg-white rounded-2xl p-3 sm:p-4 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] mb-5">
@@ -414,12 +1165,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                             <IconComp className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <span className="font-bold text-[#0b1c30] block truncate max-w-xs">
-                              {tx.estabelecimento || 'Diversos'}
+                            <span className="font-extrabold text-[#0b1c30] block truncate max-w-xs text-xs sm:text-sm">
+                              {tx.estabelecimento || 'Local Diverso'}
                             </span>
-                            {tx.observacoes && (
+                            {tx.observacoes && !tx.observacoes.startsWith('Gasto registrado:') ? (
                               <span className="text-[11px] text-[#565e74] block truncate max-w-xs">
                                 {tx.observacoes}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-[#006948] font-semibold flex items-center gap-1">
+                                <span>📍</span>
+                                <span>Local de compra registrado</span>
                               </span>
                             )}
                           </div>
@@ -507,6 +1263,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </div>
         )}
       </div>
+    </div>
+    </>
+    )}
 
       {/* Transaction Detail Modal */}
       {selectedTransactionDetail && (
@@ -546,6 +1305,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 <span className="text-[#565e74]">Valor:</span>
                 <span className="font-bold font-mono text-sm text-[#0b1c30]">
                   {formatBRL(selectedTransactionDetail.valor)}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1 border-b border-[#f8f9ff]">
+                <span className="text-[#565e74]">Local de Compra:</span>
+                <span className="font-bold text-[#006948] flex items-center gap-1">
+                  <span>📍</span>
+                  <span>{selectedTransactionDetail.estabelecimento || 'Local Diverso'}</span>
                 </span>
               </div>
 

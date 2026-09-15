@@ -20,7 +20,7 @@ export type PaymentMethod =
   | 'pix'
   | string;
 
-export type TransactionStatus = 'pago' | 'previsto';
+export type TransactionStatus = 'pago' | 'previsto' | 'pendente';
 export type TransactionType = 'despesa';
 export type UserRole = 'Felipe' | 'Genivânia' | 'Casal' | string;
 
@@ -134,10 +134,12 @@ export interface Receipt {
   tipoEstabelecimento: EstablishmentType;
   numeroCupom?: string;
   valorTotal: number;
-  status: 'Conciliado' | 'Pendente Vinculação' | 'Processando';
+  status: 'Conciliado' | 'Pendente Vinculação' | 'Processando' | 'Pendente';
   itens: PurchaseItem[];
   imagemUrl?: string;
   dadosBrutos?: string;
+  formaPagamento?: string;
+  pagoPor?: string;
 }
 
 export interface ReceiptData {

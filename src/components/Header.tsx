@@ -47,6 +47,10 @@ export const Header: React.FC<HeaderProps> = ({
     'Junho 2026',
     'Julho 2026',
     'Agosto 2026',
+    'Setembro 2026',
+    'Outubro 2026',
+    'Novembro 2026',
+    'Dezembro 2026',
   ];
 
   const getActiveUserLabel = () => {
@@ -58,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
   const getSubTitle = () => {
     switch (currentTab) {
       case 'extrato':
-        return 'Transações & Importação';
+        return 'Transações & Fechamento';
       case 'scanner':
         return 'Comprovantes com IA';
       case 'dashboard':
@@ -69,8 +73,6 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Lista & Integrações';
       case 'relatorios':
         return 'Relatórios & Cestas';
-      case 'planilhas':
-        return 'Planilhas 2026';
       case 'voz':
         return 'API Alexa & Siri';
       default:
@@ -127,7 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'text-[#565e74] hover:text-[#0b1c30]'
               }`}
             >
-              Transações & Importação
+              Transações & Fechamento
             </button>
             <button
               id="nav-tab-scanner"
@@ -243,8 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#f0fdf4] border border-[#bbf7d0] text-[#15803d] text-[10px] font-bold shrink-0 cursor-pointer active:scale-95 transition-transform"
               title="Mês de Referência"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16a34a] animate-pulse" />
-              <span className="whitespace-nowrap">{selectedMonth} • Sync</span>
+              <span className="whitespace-nowrap">{selectedMonth}</span>
             </button>
 
             {showMonthDropdown && (
@@ -331,6 +332,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
     </header>
   );
 };

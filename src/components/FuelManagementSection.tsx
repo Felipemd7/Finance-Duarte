@@ -53,7 +53,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
   onUpdateFuelLog,
   onDeleteFuelLog,
   onShowToast,
-  veiculoInfo = 'Renault Duster 2016 1.6 • Placa DUA-2026',
+  veiculoInfo = 'Jeep Compass Longitude Turbo • Placa DUA-2026',
   custosFixosRateadosKm = 0.53,
 }) => {
   // Active period filter for analytics: 'diario' | 'semanal' | 'mensal'
@@ -542,7 +542,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
               </span>
               <div>
                 <div className="font-bold text-[#0b1c30] flex items-center gap-2">
-                  <span>Renault Duster 2016 1.6</span>
+                  <span>Jeep Compass Longitude Turbo</span>
                   <span className="px-2 py-0.5 rounded-full bg-[#f1f5f9] text-[#565e74] text-[10px] font-semibold border border-[#e2e8f0]">
                     Odômetro nos abastecimentos não registrado
                   </span>
@@ -627,8 +627,8 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
               </span>
             </div>
             <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px] text-[#565e74]">
-              <span>Renault Duster 2016</span>
-              <span className="text-[#006948] font-bold">1.6 16V Flex</span>
+              <span>Jeep Compass</span>
+              <span className="text-[#006948] font-bold">Turbo Flex</span>
             </div>
           </div>
 

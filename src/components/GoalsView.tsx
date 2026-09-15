@@ -290,242 +290,212 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 1. MOBILE VIEW (Screens < 768px): Exact matches image.png                 */}
+      {/* 1. MOBILE VIEW (Screens < 768px): UX matching Image 5                     */}
       {/* ========================================================================= */}
-      <div id="metas-mobile-view" className="block md:hidden w-full max-w-md mx-auto pb-24">
-        {/* TOP SEGMENTED SWITCHER: Lista de Compras vs Metas & Carro */}
-        <div className="bg-[#eff4ff] p-1 rounded-2xl flex items-center gap-1 border border-[#dce9ff] mb-4">
+      <div id="metas-mobile-view" className="block md:hidden w-full max-w-md mx-auto px-1 pb-24">
+        {/* Segmented Top Switcher: Lista de Compras vs Metas & Carro */}
+        <div className="flex items-center p-1 bg-[#eff4ff] rounded-2xl mb-4 border border-[#dce9ff]">
           <button
-            id="mobile-tab-switcher-compras"
             onClick={() => setActiveSubTab('compras')}
-            className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'compras'
-                ? 'bg-white text-[#006948] shadow-xs border border-[#dce9ff]'
+                ? 'bg-white text-[#006948] shadow-xs'
                 : 'text-[#565e74] hover:text-[#0b1c30]'
             }`}
           >
-            <ShoppingCart className="w-4 h-4 text-[#006948]" />
+            <ShoppingCart className="w-3.5 h-3.5" />
             <span>Lista de Compras</span>
           </button>
-
           <button
-            id="mobile-tab-switcher-metas-carro"
             onClick={() => setActiveSubTab('carro')}
-            className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               activeSubTab === 'carro'
-                ? 'bg-white text-[#006948] shadow-xs border border-[#dce9ff]'
+                ? 'bg-white text-[#006948] shadow-xs'
                 : 'text-[#565e74] hover:text-[#0b1c30]'
             }`}
           >
-            <Car className="w-4 h-4 text-[#565e74]" />
+            <Car className="w-3.5 h-3.5" />
             <span>Metas & Carro</span>
           </button>
         </div>
 
-        {/* SUBTAB 1: LISTA DE COMPRAS (image.png 1:1) */}
-        {activeSubTab === 'compras' && (
-          <div className="flex flex-col gap-4">
-            {/* Card: Sincronização Ativa */}
-            <div className="bg-white rounded-3xl p-3.5 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center border border-[#a7f3d0] shrink-0">
-                  <RefreshCw className="w-5 h-5 text-[#006948]" />
+        {activeSubTab === 'compras' ? (
+          <div className="space-y-4">
+            {/* Banner Sincronização Ativa */}
+            <div className="bg-white rounded-2xl p-3 border border-[#e5eeff] shadow-2xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center shrink-0 border border-[#a7f3d0]">
+                  <RefreshCw className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#0b1c30]">
-                    <span>Sincronização Ativa</span>
-                    <span className="w-2 h-2 rounded-full bg-[#16a34a] inline-block animate-pulse shrink-0" />
-                  </div>
-                  <span className="text-[11px] text-[#565e74] block truncate mt-0.5">
+                  <span className="font-bold text-xs text-[#0b1c30] flex items-center gap-1.5">
+                    Sincronização Ativa
+                    <span className="w-2 h-2 rounded-full bg-[#16a34a] animate-pulse" />
+                  </span>
+                  <span className="text-[10px] text-[#565e74] block truncate">
                     Alexa & Siri conectados em tempo real
                   </span>
                 </div>
               </div>
-
-              <div className="flex items-center -space-x-2 shrink-0">
-                <div className="w-7 h-7 rounded-full bg-[#dae2fd] text-[#006194] font-bold text-xs flex items-center justify-center border-2 border-white shadow-2xs">
+              <div className="flex -space-x-1.5 shrink-0">
+                <span className="w-6 h-6 rounded-full bg-[#2563eb] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white">
                   A
-                </div>
-                <div className="w-7 h-7 rounded-full bg-[#006194] text-white font-bold text-xs flex items-center justify-center border-2 border-white shadow-2xs">
+                </span>
+                <span className="w-6 h-6 rounded-full bg-[#0284c7] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white">
                   S
-                </div>
+                </span>
               </div>
             </div>
 
-            {/* Input Bar: Mic + Input + Green Button */}
+            {/* Input por voz ou texto */}
             <form onSubmit={handleAddItem} className="flex items-center gap-2">
               <button
                 type="button"
-                id="btn-voice-shopping-mob"
                 onClick={handleTriggerVoice}
-                className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs transition-all active:scale-95 cursor-pointer ${
+                className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 transition-colors shadow-2xs cursor-pointer ${
                   isListening
-                    ? 'bg-[#fee2e2] text-[#dc2626] animate-pulse border border-[#fca5a5]'
-                    : 'bg-[#e0f2fe] text-[#0284c7] hover:bg-[#bae6fd]'
+                    ? 'bg-[#dc2626] text-white animate-pulse'
+                    : 'bg-[#eff4ff] text-[#006194] hover:bg-[#dce9ff] border border-[#dce9ff]'
                 }`}
-                title="Adicionar por voz"
+                title="Falar comando de voz"
               >
                 <Mic className="w-5 h-5" />
               </button>
 
               <input
                 type="text"
+                placeholder="Adicionar por voz ou texto... (ex: 'café')"
                 value={newItemText}
                 onChange={(e) => setNewItemText(e.target.value)}
-                placeholder="Adicionar por voz ou texto... (ex: 'ca..."
-                className="flex-1 px-4 py-3 bg-white border border-[#e5eeff] rounded-2xl text-xs text-[#0b1c30] placeholder-[#565e74] shadow-2xs focus:outline-none focus:border-[#006948] transition-colors"
+                className="flex-1 h-11 px-3.5 rounded-2xl bg-white border border-[#cbd5e1] text-xs text-[#0b1c30] focus:outline-hidden focus:border-[#006948] shadow-2xs placeholder:text-[#94a3b8]"
               />
 
               <button
                 type="submit"
-                id="btn-add-shopping-plus-mob"
-                className="w-11 h-11 rounded-2xl bg-[#005a3c] text-white hover:bg-[#00472f] flex items-center justify-center shrink-0 shadow-xs transition-transform active:scale-95 cursor-pointer"
-                title="Adicionar"
+                className="w-11 h-11 rounded-2xl bg-[#006948] hover:bg-[#00563b] text-white flex items-center justify-center shrink-0 shadow-2xs cursor-pointer transition-colors"
+                title="Adicionar item"
               >
-                <Plus className="w-5 h-5 stroke-[2.5]" />
+                <Plus className="w-5 h-5" />
               </button>
             </form>
 
-            {/* Store Filter Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+            {/* Chips de Estabelecimentos */}
+            <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
               <button
-                type="button"
                 onClick={() => setActiveStore('atacadao')}
-                className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                   activeStore === 'atacadao'
-                    ? 'bg-[#005a3c] text-white shadow-xs'
-                    : 'bg-[#eff4ff] text-[#006194] hover:bg-[#e2edff]'
+                    ? 'bg-[#006948] text-white shadow-2xs'
+                    : 'bg-[#eff4ff] text-[#006194] border border-[#dce9ff]'
                 }`}
               >
                 <span>Atacadão</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeStore === 'atacadao' ? 'bg-white/20 text-white' : 'bg-[#dce9ff] text-[#006194]'}`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  activeStore === 'atacadao' ? 'bg-white/20 text-white' : 'bg-white text-[#006194]'
+                }`}>
                   12
                 </span>
               </button>
 
               <button
-                type="button"
                 onClick={() => setActiveStore('drogasil')}
-                className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                   activeStore === 'drogasil'
-                    ? 'bg-[#005a3c] text-white shadow-xs'
-                    : 'bg-[#eff4ff] text-[#006194] hover:bg-[#e2edff]'
+                    ? 'bg-[#006948] text-white shadow-2xs'
+                    : 'bg-[#eff4ff] text-[#006194] border border-[#dce9ff]'
                 }`}
               >
                 <span>Drogasil</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeStore === 'drogasil' ? 'bg-white/20 text-white' : 'bg-[#dce9ff] text-[#006194]'}`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  activeStore === 'drogasil' ? 'bg-white/20 text-white' : 'bg-white text-[#006194]'
+                }`}>
                   4
                 </span>
               </button>
 
               <button
-                type="button"
                 onClick={() => setActiveStore('sams')}
-                className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 cursor-pointer transition-all shrink-0 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                   activeStore === 'sams'
-                    ? 'bg-[#005a3c] text-white shadow-xs'
-                    : 'bg-[#eff4ff] text-[#006194] hover:bg-[#e2edff]'
+                    ? 'bg-[#006948] text-white shadow-2xs'
+                    : 'bg-[#eff4ff] text-[#006194] border border-[#dce9ff]'
                 }`}
               >
                 <span>Sam's Club</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeStore === 'sams' ? 'bg-white/20 text-white' : 'bg-[#dce9ff] text-[#006194]'}`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  activeStore === 'sams' ? 'bg-white/20 text-white' : 'bg-white text-[#006194]'
+                }`}>
                   5
                 </span>
               </button>
             </div>
 
-            {/* Section: Itens Selecionados */}
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between pt-1">
-                <h2 className="font-display font-bold text-base text-[#0b1c30]">
-                  Itens Selecionados
-                </h2>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#e5eeff] text-[#0b1c30] text-[11px] font-semibold">
+            {/* Seção Itens Selecionados */}
+            <div className="bg-white rounded-3xl p-4 border border-[#e5eeff] shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9] mb-3">
+                <div>
+                  <h3 className="font-display font-black text-sm text-[#0b1c30]">
+                    Itens Selecionados
+                  </h3>
+                  <span className="text-[10px] text-[#565e74]">
+                    Lista compartilhada do casal
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="px-2 py-0.5 rounded-full bg-[#eff4ff] text-[#006194] text-[10px] font-bold inline-block mb-0.5">
                     {boughtItemsCount}/{totalItemsCount} comprados
                   </span>
-                  <span className="text-xs font-bold text-[#006948] font-mono">
-                    Subtotal: {formatBRL(subtotalBought || 231.3)}
+                  <span className="font-mono font-bold text-xs text-[#006948] block">
+                    Subtotal: {formatBRL(subtotalBought)}
                   </span>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              {/* Lista de Itens */}
+              <div className="space-y-2">
                 {currentStoreItems.map((item) => (
                   <div
                     key={item.id}
                     onClick={() => handleToggleItem(item.id)}
-                    className="bg-white rounded-2xl p-3.5 border border-[#e5eeff] shadow-[0_2px_8px_rgba(11,28,48,0.02)] flex items-start justify-between gap-3 cursor-pointer hover:border-[#cbd5e1] transition-all"
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                      item.comprado
+                        ? 'bg-[#f8faff] border-[#e5eeff] opacity-80'
+                        : 'bg-white border-[#cbd5e1] shadow-2xs'
+                    }`}
                   >
-                    <div className="flex items-start gap-3 min-w-0">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleItem(item.id);
-                        }}
-                        className="mt-0.5 shrink-0 focus:outline-none cursor-pointer"
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                          item.comprado
+                            ? 'bg-[#006948] text-white'
+                            : 'border-2 border-[#94a3b8] bg-white'
+                        }`}
                       >
-                        {item.comprado ? (
-                          <div className="w-5 h-5 rounded-full bg-[#006948] text-white flex items-center justify-center">
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-[#e0f2fe] border border-[#bae6fd]" />
-                        )}
-                      </button>
+                        {item.comprado && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      </div>
 
                       <div className="min-w-0">
-                        <span className="text-xs sm:text-sm font-semibold block truncate text-[#0b1c30]">
+                        <span className={`text-xs font-bold block truncate ${
+                          item.comprado ? 'text-[#565e74] line-through' : 'text-[#0b1c30]'
+                        }`}>
                           {item.nome}
                         </span>
 
-                        <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
-                          {item.origem.tipo === 'alexa' && (
-                            <span className="px-2.5 py-0.5 rounded-full bg-[#eef2ff] text-[#4338ca] text-[10px] font-semibold flex items-center gap-1 border border-[#e0e7ff]">
-                              <Volume2 className="w-3 h-3" />
-                              <span>{item.origem.label}</span>
-                            </span>
-                          )}
-
-                          {item.origem.tipo === 'siri' && (
-                            <span className="px-2.5 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] text-[10px] font-semibold flex items-center gap-1 border border-[#bae6fd]">
-                              <Mic className="w-3 h-3" />
-                              <span>{item.origem.label}</span>
-                            </span>
-                          )}
-
-                          {item.origem.tipo === 'fixo' && (
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 border ${
-                                item.origem.label.includes('Proteína')
-                                  ? 'bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]'
-                                  : item.origem.label.includes('Casa')
-                                  ? 'bg-[#eff4ff] text-[#2563eb] border-[#dce9ff]'
-                                  : 'bg-[#f1f5f9] text-[#475569] border-[#e2e8f0]'
-                              }`}
-                            >
-                              <span>{item.origem.label}</span>
-                            </span>
-                          )}
-
-                          {item.origem.tipo === 'manual' && (
-                            <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-[10px] font-semibold border border-[#a7f3d0]">
-                              <span>{item.origem.label}</span>
-                            </span>
-                          )}
-
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="px-1.5 py-0.2 rounded bg-[#eff4ff] text-[#006194] text-[9px] font-medium flex items-center gap-1">
+                            <span>✨</span>
+                            {item.origem.label}
+                          </span>
                           {item.origem.subtag && (
-                            <span className="px-2.5 py-0.5 rounded-full bg-[#eff4ff] text-[#4f46e5] text-[10px] font-semibold flex items-center gap-1 border border-[#dce9ff]">
-                              <Star className="w-3 h-3 text-[#4f46e5]" />
-                              <span>{item.origem.subtag}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-[#fef3c7] text-[#92400e] text-[9px] font-bold">
+                              ★ {item.origem.subtag}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    <span className="font-bold text-xs sm:text-sm text-[#0b1c30] font-mono shrink-0">
+                    <span className="font-mono font-bold text-xs text-[#0b1c30] shrink-0">
                       {formatBRL(item.preco)}
                     </span>
                   </div>
@@ -533,299 +503,248 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
               </div>
             </div>
 
-            {/* Card: Auditoria & IA */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-[#006194] text-white flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4 text-white" />
+            {/* Card Auditoria & IA */}
+            <div className="bg-[#eff4ff] rounded-3xl p-4 border border-[#dce9ff] shadow-xs">
+              <div className="flex items-center justify-between pb-2.5 border-b border-[#dce9ff]">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-[#006194] text-white flex items-center justify-center shadow-2xs">
+                    <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-display font-bold text-sm text-[#0b1c30]">
-                      Auditoria & IA
-                    </h3>
-                    <p className="text-[11px] text-[#565e74]">
-                      Reconciliação do último cupom
-                    </p>
+                    <h4 className="font-display font-bold text-xs text-[#0b1c30]">Auditoria & IA</h4>
+                    <p className="text-[10px] text-[#565e74]">Reconciliação do último cupom</p>
                   </div>
                 </div>
-
-                <span className="px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#006948] text-[10px] font-bold border border-[#a7f3d0]">
+                <span className="px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#166534] text-[10px] font-bold border border-[#86efac]">
                   Cupom Lido
                 </span>
               </div>
 
-              <div className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#e5eeff] mt-3.5 flex items-center justify-between">
+              <div className="pt-3 pb-2 flex items-baseline justify-between">
                 <div>
-                  <span className="text-xs text-[#565e74] font-medium block">
-                    Aderência à Lista
-                  </span>
-                  <span className="font-display font-extrabold text-3xl text-[#006948] font-mono leading-tight mt-0.5 block">
-                    82%
-                  </span>
+                  <span className="text-[10px] text-[#565e74] font-medium block">Aderência à Lista</span>
+                  <span className="font-display font-black text-2xl text-[#006948] font-mono">82%</span>
                 </div>
-
                 <div className="text-right">
-                  <span className="text-xs text-[#565e74] font-medium block">
-                    10 planejados
-                  </span>
-                  <span className="text-xs text-[#dc2626] font-bold block mt-0.5">
-                    2 impulsos detectados
-                  </span>
+                  <span className="text-xs font-bold text-[#0b1c30] block">10 planejados</span>
+                  <span className="text-[10px] font-bold text-[#dc2626]">2 impulsos detectados</span>
                 </div>
               </div>
 
               <div
                 onClick={handleToggleReclassification}
-                className="bg-white rounded-2xl p-3 border border-[#e5eeff] mt-3 cursor-pointer hover:border-[#cbd5e1] transition-all"
-                title="Clique para alternar reclassificação"
+                className="mt-2 p-3 rounded-2xl bg-white border border-[#dce9ff] flex items-center justify-between gap-2.5 cursor-pointer active:scale-98 transition-transform"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ArrowLeftRight className="w-4 h-4 text-[#565e74] shrink-0" />
-                    <span className="font-bold text-xs sm:text-sm text-[#0b1c30]">
-                      Vinho Chileno Tinto
-                    </span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-xl bg-[#fee2e2] text-[#dc2626] flex items-center justify-center shrink-0">
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
                   </div>
-                  <span className="font-bold text-xs sm:text-sm text-[#0b1c30] font-mono">
-                    R$ 68,00
-                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs text-[#0b1c30] truncate">Vinho Chileno Tinto</span>
+                      <span className="font-mono font-bold text-xs text-[#dc2626]">R$ 68,00</span>
+                    </div>
+                    <p className="text-[10px] text-[#565e74] truncate mt-0.5">
+                      {isReclassified
+                        ? 'Reclassificado de Alimentação para Lazer para proteger o teto.'
+                        : 'Toque para mover de Alimentação para Lazer.'}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#565e74] mt-1 pl-6 leading-relaxed">
-                  Reclassificado de Alimentação para Lazer para proteger o teto de mercado.
-                </p>
+                <span className={`px-2 py-1 rounded-lg text-[9px] font-bold shrink-0 ${
+                  isReclassified ? 'bg-[#ecfdf5] text-[#006948]' : 'bg-[#eff4ff] text-[#006194]'
+                }`}>
+                  {isReclassified ? 'Ajustado' : 'Reclassificar'}
+                </span>
               </div>
             </div>
 
-            {/* Card: Tetos do Mês */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)]">
-              <div className="flex items-center justify-between mb-3.5">
+            {/* Tetos do Mês */}
+            <div className="bg-white rounded-3xl p-4 border border-[#e5eeff] shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9] mb-3">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="w-4 h-4 text-[#006948]" />
-                  <h3 className="font-display font-bold text-base text-[#0b1c30]">
-                    Tetos do Mês
-                  </h3>
+                  <h4 className="font-display font-bold text-xs text-[#0b1c30]">Tetos do Mês</h4>
                 </div>
-                <span className="text-xs text-[#565e74] font-medium">
-                  Março 2026
-                </span>
+                <span className="text-[10px] text-[#565e74] font-medium">{selectedMonth}</span>
               </div>
 
-              {/* Supermercado */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="font-semibold text-[#0b1c30]">Supermercado</span>
-                  <span className="font-mono">
-                    <span className="font-bold text-[#dc2626]">
-                      {formatBRL(supermercadoGasto).replace(',00', '')}
-                    </span>{' '}
-                    <span className="text-[#565e74]">
-                      / {formatBRL(supermercadoTeto).replace(',00', '')}
+              <div className="space-y-3.5">
+                {/* Supermercado */}
+                <div>
+                  <div className="flex justify-between items-baseline text-xs mb-1">
+                    <span className="font-bold text-[#0b1c30]">Supermercado</span>
+                    <span className="font-mono text-[11px]">
+                      <strong className="text-[#dc2626]">{formatBRL(supermercadoGasto)}</strong>
+                      <span className="text-[#565e74]"> / {formatBRL(supermercadoTeto)}</span>
                     </span>
-                  </span>
+                  </div>
+                  <div className="h-2 w-full bg-[#fee2e2] rounded-full overflow-hidden">
+                    <div className="h-full bg-[#dc2626] rounded-full" style={{ width: '100%' }} />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] mt-1 text-[#dc2626] font-bold">
+                    <span>⚠ Excedido em {formatBRL(supermercadoGasto - supermercadoTeto)}</span>
+                    <span>117% utilizado</span>
+                  </div>
                 </div>
-                <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden mt-1.5">
-                  <div className="h-full bg-[#dc2626] rounded-full w-full" />
-                </div>
-                <div className="flex items-center justify-between text-[11px] mt-1.5">
-                  <span className="text-[#dc2626] font-bold flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Excedido em {formatBRL(supermercadoGasto - supermercadoTeto)}</span>
-                  </span>
-                  <span className="text-[#565e74] font-medium">
-                    {Math.round((supermercadoGasto / supermercadoTeto) * 100)}% utilizado
-                  </span>
-                </div>
-              </div>
 
-              {/* Carro */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="font-semibold text-[#0b1c30] truncate pr-2">
-                    Carro (Combustível + Seguro + Manutenção)
-                  </span>
-                  <span className="font-mono font-semibold text-[#0b1c30] shrink-0">
-                    {formatBRL(carroGasto).replace(',00', '')} / {formatBRL(carroTeto).replace(',00', '')}
-                  </span>
+                {/* Carro Jeep Compass */}
+                <div>
+                  <div className="flex justify-between items-baseline text-xs mb-1">
+                    <span className="font-bold text-[#0b1c30]">Carro (Combustível + Seguro)</span>
+                    <span className="font-mono text-[11px]">
+                      <strong className="text-[#0b1c30]">{formatBRL(carroGasto)}</strong>
+                      <span className="text-[#565e74]"> / {formatBRL(carroTeto)}</span>
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-[#f1f5f9] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#006948] rounded-full"
+                      style={{ width: `${Math.min(100, (carroGasto / carroTeto) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] mt-1">
+                    <span className="text-[#006948] font-bold">✓ Dentro do teto planejado</span>
+                    <span className="text-[#565e74] font-medium">R$ 50,00 livres</span>
+                  </div>
                 </div>
-                <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden mt-1.5">
-                  <div className="h-full bg-[#005a3c] rounded-full w-[97%]" />
-                </div>
-                <div className="flex items-center justify-between text-[11px] mt-1.5">
-                  <span className="text-[#006948] font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Dentro do teto planejado</span>
-                  </span>
-                  <span className="text-[#565e74] font-semibold">
-                    {formatBRL(carroTeto - carroGasto)} livres
-                  </span>
-                </div>
-              </div>
 
-              {/* Lazer */}
-              <div>
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="font-semibold text-[#0b1c30]">Lazer & Saídas</span>
-                  <span className="font-mono font-semibold text-[#0b1c30]">
-                    {formatBRL(lazerGasto).replace(',00', '')} / {formatBRL(lazerTeto).replace(',00', '')}
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden mt-1.5">
-                  <div className="h-full bg-[#475569] rounded-full w-[93%]" />
-                </div>
-                <div className="flex items-center justify-between text-[11px] mt-1.5">
-                  <span className="text-[#565e74] font-semibold flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 shrink-0" />
-                    <span>{formatBRL(lazerTeto - lazerGasto)} disponíveis</span>
-                  </span>
-                  <span className="text-[#565e74] font-medium">
-                    {Math.round((lazerGasto / lazerTeto) * 100)}% utilizado
-                  </span>
+                {/* Lazer & Saídas */}
+                <div>
+                  <div className="flex justify-between items-baseline text-xs mb-1">
+                    <span className="font-bold text-[#0b1c30]">Lazer & Saídas</span>
+                    <span className="font-mono text-[11px]">
+                      <strong className="text-[#0b1c30]">{formatBRL(lazerGasto)}</strong>
+                      <span className="text-[#565e74]"> / {formatBRL(lazerTeto)}</span>
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-[#f1f5f9] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#0b1c30] rounded-full"
+                      style={{ width: `${Math.min(100, (lazerGasto / lazerTeto) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] mt-1">
+                    <span className="text-[#565e74] font-medium">🔄 {formatBRL(lazerTeto - lazerGasto)} disponíveis</span>
+                    <span className="text-[#565e74] font-bold">
+                      {Math.round((lazerGasto / lazerTeto) * 100)}% utilizado
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
-
-        {/* SUBTAB 2: METAS & CARRO (Mobile) */}
-        {activeSubTab === 'carro' && (
-          <div className="flex flex-col gap-4 animate-in fade-in">
-            {/* Card: Veículo */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)]">
-              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
+        ) : (
+          /* activeSubTab === 'carro' */
+          <div className="space-y-4">
+            {/* Card Jeep Compass */}
+            <div className="bg-gradient-to-br from-[#0b1c30] to-[#1e3a5f] rounded-3xl p-5 text-white shadow-md border border-[#234567]">
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-[#006948] text-white flex items-center justify-center">
-                    <Car className="w-4 h-4 text-white" />
+                  <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-white border border-white/20">
+                    <Car className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-display font-bold text-sm text-[#0b1c30]">
-                      Gestão Anual do Carro
-                    </h3>
-                    <span className="text-[11px] text-[#565e74]">Renault Duster 2016 1.6 • DUA-2026</span>
+                    <h3 className="font-display font-bold text-sm">Jeep Compass Longitude Turbo</h3>
+                    <p className="text-[10px] text-white/70">Placa DUA-2026 • Flex / Gasolina</p>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-[10px] font-bold border border-[#a7f3d0]">
-                  Conta Única Casal
+                <span className="px-2 py-0.5 rounded-full bg-[#16a34a]/20 text-[#4ade80] text-[10px] font-bold border border-[#16a34a]/40">
+                  Em Dia
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 gap-2.5 mt-3.5">
-                <div className="bg-[#eff4ff] border border-[#dce9ff] rounded-2xl p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#0b1c30]">IPVA 2026 (PI)</span>
-                    <span className="px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] font-bold text-[10px]">
-                      3 de 5 Quitadas
-                    </span>
-                  </div>
-                  <div className="my-1.5 flex items-baseline justify-between">
-                    <span className="font-display font-bold text-base text-[#0b1c30] font-mono">R$ 3.200,00</span>
-                    <span className="text-[11px] text-[#565e74]">R$ 640,00/mês</span>
-                  </div>
-                  <div className="w-full bg-white h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#006948] h-full rounded-full w-[60%]" />
-                  </div>
+              <div className="grid grid-cols-3 gap-2 pt-4">
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-center">
+                  <span className="text-[10px] text-white/60 block">Odômetro</span>
+                  <span className="font-mono font-bold text-xs text-white">42.850 km</span>
                 </div>
-
-                <div className="bg-[#eff4ff] border border-[#dce9ff] rounded-2xl p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#0b1c30]">Seguro Cobertura Total</span>
-                    <span className="px-2 py-0.5 rounded-full bg-[#dae2fd] text-[#006194] font-bold text-[10px]">
-                      Renovação Nov/26
-                    </span>
-                  </div>
-                  <div className="my-1.5 flex items-baseline justify-between">
-                    <span className="font-display font-bold text-base text-[#0b1c30] font-mono">R$ 2.800,00</span>
-                    <span className="text-[11px] text-[#565e74]">Provisionado R$ 233,33/mês</span>
-                  </div>
-                  <div className="w-full bg-white h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#006194] h-full rounded-full w-[40%]" />
-                  </div>
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-center">
+                  <span className="text-[10px] text-white/60 block">Autonomia</span>
+                  <span className="font-mono font-bold text-xs text-white">520 km</span>
                 </div>
-
-                <div className="bg-[#eff4ff] border border-[#dce9ff] rounded-2xl p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#0b1c30]">Manutenção Preventiva</span>
-                    <span className="px-2 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] font-bold text-[10px]">
-                      Teto R$ 3.000
-                    </span>
-                  </div>
-                  <div className="my-1.5 flex items-baseline justify-between">
-                    <span className="font-display font-bold text-base text-[#0b1c30] font-mono">R$ 650,00</span>
-                    <span className="text-[11px] text-[#006948] font-semibold">Revisão 40k em dia</span>
-                  </div>
-                  <div className="w-full bg-white h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#006948] h-full rounded-full w-[22%]" />
-                  </div>
+                <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-center">
+                  <span className="text-[10px] text-white/60 block">Consumo Médio</span>
+                  <span className="font-mono font-bold text-xs text-[#4ade80]">9.8 km/L</span>
                 </div>
               </div>
             </div>
 
-            {/* Card: Metas */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#e5eeff] shadow-[0_4px_20px_rgba(11,28,48,0.04)]">
-              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-[#006948] text-white flex items-center justify-center">
-                    <PiggyBank className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-display font-bold text-sm text-[#0b1c30]">
-                      Metas Conjuntas do Casal
-                    </h3>
-                    <span className="text-[11px] text-[#565e74]">Patrimônio e Conquistas</span>
-                  </div>
+            {/* Metas de Economia do Casal */}
+            <div className="bg-white rounded-3xl p-4 border border-[#e5eeff] shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9] mb-3">
+                <div className="flex items-center gap-2">
+                  <PiggyBank className="w-4 h-4 text-[#006948]" />
+                  <h4 className="font-display font-bold text-xs text-[#0b1c30]">
+                    Metas & Sonhos do Casal ({goals.length})
+                  </h4>
                 </div>
-
                 <button
                   onClick={() => setShowAddGoalModal(true)}
-                  className="px-2.5 py-1 rounded-full bg-[#005a3c] text-white text-xs font-bold flex items-center gap-1 shadow-xs hover:bg-[#00472f] cursor-pointer"
+                  className="px-2.5 py-1 rounded-xl bg-[#006948] text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3 h-3" />
                   <span>Nova Meta</span>
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3 mt-3.5">
-                <div className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#e5eeff]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs sm:text-sm text-[#0b1c30]">Reserva de Emergência</span>
-                    <span className="text-xs font-bold text-[#006948]">83% atingido</span>
-                  </div>
-                  <div className="flex items-baseline justify-between mt-1 text-xs">
-                    <span className="font-bold text-[#006948] font-mono">R$ 41.500,00</span>
-                    <span className="text-[#565e74] font-mono">Alvo: R$ 50.000,00</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden mt-2">
-                    <div className="h-full bg-[#006948] rounded-full w-[83%]" />
-                  </div>
-                </div>
+              <div className="space-y-3">
+                {goals.map((g) => {
+                  const pct = Math.min(100, Math.round(((g.valorAtual || 0) / (g.valorAlvo || 1)) * 100));
+                  return (
+                    <div key={g.id} className="p-3 rounded-2xl bg-[#f8faff] border border-[#e5eeff]">
+                      <div className="flex justify-between items-baseline text-xs mb-1">
+                        <span className="font-bold text-[#0b1c30]">{g.titulo}</span>
+                        <span className="font-mono text-[11px] font-bold text-[#006948]">
+                          {formatBRL(g.valorAtual || 0)} / {formatBRL(g.valorAlvo || 0)}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-[#e5eeff] rounded-full overflow-hidden">
+                        <div className="h-full bg-[#006948] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-[#565e74] mt-1">
+                        <span>{pct}% conquistado</span>
+                        <span>Faltam {formatBRL((g.valorAlvo || 0) - (g.valorAtual || 0))}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                <div className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#e5eeff]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs sm:text-sm text-[#0b1c30]">Viagem Europa 2026</span>
-                    <span className="text-xs font-bold text-[#006194]">72% atingido</span>
-                  </div>
-                  <div className="flex items-baseline justify-between mt-1 text-xs">
-                    <span className="font-bold text-[#006194] font-mono">R$ 18.200,00</span>
-                    <span className="text-[#565e74] font-mono">Alvo: R$ 25.000,00</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden mt-2">
-                    <div className="h-full bg-[#006194] rounded-full w-[72%]" />
-                  </div>
+            {/* Abastecimentos Recentes do Jeep */}
+            <div className="bg-white rounded-3xl p-4 border border-[#e5eeff] shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9] mb-3">
+                <div className="flex items-center gap-2">
+                  <Fuel className="w-4 h-4 text-[#006194]" />
+                  <h4 className="font-display font-bold text-xs text-[#0b1c30]">
+                    Abastecimentos Recentes
+                  </h4>
                 </div>
+                <span className="text-[10px] text-[#006194] font-bold">
+                  {(fuelLogs || []).length} registros
+                </span>
+              </div>
 
-                <div className="bg-[#f8faff] rounded-2xl p-3.5 border border-[#e5eeff]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs sm:text-sm text-[#0b1c30]">Troca de Veículo Casal</span>
-                    <span className="text-xs font-bold text-[#565e74]">46% atingido</span>
+              <div className="space-y-2">
+                {(fuelLogs || []).slice(0, 3).map((log) => (
+                  <div
+                    key={log.id}
+                    className="p-2.5 rounded-2xl bg-[#f8faff] border border-[#e5eeff] flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <span className="font-bold text-[#0b1c30] block truncate">
+                        {log.posto || 'Posto de Combustível'}
+                      </span>
+                      <span className="text-[10px] text-[#565e74]">
+                        {log.data} • {log.litros}L ({log.tipoCombustivel})
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-[#0b1c30] shrink-0">
+                      {formatBRL(log.valorTotal)}
+                    </span>
                   </div>
-                  <div className="flex items-baseline justify-between mt-1 text-xs">
-                    <span className="font-bold text-[#565e74] font-mono">R$ 28.000,00</span>
-                    <span className="text-[#565e74] font-mono">Alvo: R$ 60.000,00</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden mt-2">
-                    <div className="h-full bg-[#565e74] rounded-full w-[46%]" />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -833,24 +752,25 @@ export const GoalsView: React.FC<GoalsViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* ========================================================================= */}
       {/* 2. DESKTOP VIEW (Screens >= 768px): Exact matches image.png               */}
       {/* ========================================================================= */}
-      <GoalsDesktopView
-        isReclassified={isReclassified}
-        onToggleReclassification={handleToggleReclassification}
-        onShowToast={showToast}
-        onOpenAddGoal={() => setShowAddGoalModal(true)}
-        goals={goals}
-        transactions={transactions}
-        selectedMonth={selectedMonth}
-        onAddGoal={onAddGoal}
-        onUpdateGoal={onUpdateGoal}
-        fuelLogs={fuelLogs}
-        onAddFuelLog={onAddFuelLog}
-        onUpdateFuelLog={onUpdateFuelLog}
-        onDeleteFuelLog={onDeleteFuelLog}
-      />
+      <div id="metas-desktop-view" className="hidden md:block">
+        <GoalsDesktopView
+          isReclassified={isReclassified}
+          onToggleReclassification={handleToggleReclassification}
+          onShowToast={showToast}
+          onOpenAddGoal={() => setShowAddGoalModal(true)}
+          goals={goals}
+          transactions={transactions}
+          selectedMonth={selectedMonth}
+          onAddGoal={onAddGoal}
+          onUpdateGoal={onUpdateGoal}
+          fuelLogs={fuelLogs}
+          onAddFuelLog={onAddFuelLog}
+          onUpdateFuelLog={onUpdateFuelLog}
+          onDeleteFuelLog={onDeleteFuelLog}
+        />
+      </div>
       {/* ========================================================================= */}
       {/* MODAL: Nova Meta Financeira do Casal                                      */}
       {/* ========================================================================= */}
