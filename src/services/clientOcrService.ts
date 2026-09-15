@@ -4,7 +4,7 @@
 const GEMINI_API_KEY =
   (import.meta as any).env?.VITE_GEMINI_API_KEY ||
   (import.meta as any).env?.GEMINI_API_KEY ||
-  'AIzaSyCoQOy42UyZYpT8idP-P69ki5XIQXYAgfg';
+  '';
 
 const CANDIDATE_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash'];
 
@@ -119,6 +119,12 @@ Retorne ESTRITAMENTE em formato JSON com o seguinte schema:
       if (!response.ok) {
         const errText = await response.text();
         console.warn(`[ClientOcrService] Modelo ${model} falhou com status ${response.status}:`, errText);
+        try {
+          const errJson = JSON.parse(errText);
+          lastError = new Error(errJson.error?.message || `Erro ${response.status} na API Gemini`);
+        } catch {
+          lastError = new Error(`Erro ${response.status} na API Gemini: ${errText.slice(0, 100)}`);
+        }
         continue;
       }
 
@@ -213,7 +219,16 @@ Retorne ESTRITAMENTE em formato JSON:
         }),
       });
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        const errText = await response.text();
+        try {
+          const errJson = JSON.parse(errText);
+          lastError = new Error(errJson.error?.message || `Erro ${response.status} na API Gemini`);
+        } catch {
+          lastError = new Error(`Erro ${response.status} na API Gemini: ${errText.slice(0, 100)}`);
+        }
+        continue;
+      }
 
       const resJson = await response.json();
       const rawText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;

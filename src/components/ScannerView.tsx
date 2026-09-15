@@ -620,7 +620,14 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       }
     } catch (err: any) {
       console.error('OCR Error:', err);
-      showToast('Erro ao comunicar com a IA Gemini para leitura do comprovante.');
+      const msg = String(err?.message || '');
+      if (msg.includes('leaked') || msg.includes('API key was reported as leaked')) {
+        showToast('⚠️ Chave do Gemini bloqueada pelo Google (reportada como vazada). Cadastre uma nova chave no .env e Vercel.');
+      } else if (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID') || msg.includes('403') || msg.includes('401')) {
+        showToast('⚠️ Chave Gemini inválida ou não autorizada. Verifique suas credenciais.');
+      } else {
+        showToast(`Erro na leitura do comprovante: ${msg.slice(0, 80) || 'Falha ao comunicar com a IA'}`);
+      }
     } finally {
       setIsScanningFile(false);
       setScanStepMessage('');
