@@ -333,6 +333,75 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
+      {/* Mobile Horizontal Navigation Tabs Strip (Only on mobile < 768px) */}
+      <div className="flex md:hidden items-center gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar border-t border-[#e5eeff]/80 bg-white/80 backdrop-blur-md">
+        <button
+          id="m-tab-dashboard"
+          onClick={() => onTabChange('dashboard')}
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            currentTab === 'dashboard'
+              ? 'bg-[#006948] text-white shadow-xs font-bold'
+              : 'bg-[#f0f4f9] text-[#565e74] hover:text-[#0b1c30]'
+          }`}
+        >
+          Dashboard
+        </button>
+        <button
+          id="m-tab-extrato"
+          onClick={() => onTabChange('extrato')}
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            currentTab === 'extrato'
+              ? 'bg-[#006948] text-white shadow-xs font-bold'
+              : 'bg-[#f0f4f9] text-[#565e74] hover:text-[#0b1c30]'
+          }`}
+        >
+          Extrato
+        </button>
+        <button
+          id="m-tab-scanner"
+          onClick={() => onTabChange('scanner')}
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            currentTab === 'scanner'
+              ? 'bg-[#006948] text-white shadow-xs font-bold'
+              : 'bg-[#f0f4f9] text-[#565e74] hover:text-[#0b1c30]'
+          }`}
+        >
+          Scanner IA
+        </button>
+        <button
+          id="m-tab-metas"
+          onClick={() => onTabChange('metas')}
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            currentTab === 'metas'
+              ? 'bg-[#006948] text-white shadow-xs font-bold'
+              : 'bg-[#f0f4f9] text-[#565e74] hover:text-[#0b1c30]'
+          }`}
+        >
+          Metas & Carro
+        </button>
+        <button
+          id="m-tab-relatorios"
+          onClick={() => onTabChange('relatorios')}
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            currentTab === 'relatorios'
+              ? 'bg-[#006948] text-white shadow-xs font-bold'
+              : 'bg-[#f0f4f9] text-[#565e74] hover:text-[#0b1c30]'
+          }`}
+        >
+          Relatórios BI
+        </button>
+        <button
+          id="m-tab-lista"
+          onClick={() => onTabChange('lista')}
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+            currentTab === 'lista'
+              ? 'bg-[#006948] text-white shadow-xs font-bold'
+              : 'bg-[#f0f4f9] text-[#565e74] hover:text-[#0b1c30]'
+          }`}
+        >
+          Lista de Compras
+        </button>
+      </div>
     </header>
   );
 };

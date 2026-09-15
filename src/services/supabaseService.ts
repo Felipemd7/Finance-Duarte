@@ -715,6 +715,58 @@ export async function deleteReceiptFromCloud(
   }
 }
 
+// ---------------------------------------------------------
+// FINANCIAL GOALS (Metas Financeiras do Casal)
+// ---------------------------------------------------------
+
+export async function saveGoalToCloud(goal: FinancialGoal): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const payload = {
+      id: goal.id,
+      usuario_id: goal.usuarioId || goal.usuario_id || 'usr-felipe',
+      titulo: goal.titulo,
+      tipo_meta: goal.tipoMeta || (goal.tipo === 'teto_gasto' ? 'gasto' : 'economia'),
+      periodo: goal.periodo || 'mensal',
+      valor_planejado: goal.valorPlanejado || goal.valorAlvo || 0,
+      valor_atual: goal.valorAtual || 0,
+      subcategoria_id: goal.subcategoria || goal.subcategoria_id || null,
+      is_carro: Boolean(goal.isCarro || goal.is_carro),
+      alerta_percentual: goal.alertaPercentual || 85,
+      descricao: goal.descricao || null,
+    };
+
+    const { error } = await supabase.from('goals').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.warn('[SupabaseService] Erro ao salvar meta:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SupabaseService] Falha ao persistir meta:', err);
+    return false;
+  }
+}
+
+export async function updateGoalInCloud(goal: FinancialGoal): Promise<boolean> {
+  return saveGoalToCloud(goal);
+}
+
+export async function deleteGoalFromCloud(id: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { error } = await supabase.from('goals').delete().eq('id', id);
+    if (error) {
+      console.warn('[SupabaseService] Erro ao excluir meta:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SupabaseService] Falha ao excluir meta:', err);
+    return false;
+  }
+}
+
 
 
 

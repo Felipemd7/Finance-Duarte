@@ -27,6 +27,9 @@ import {
   saveScannedReceiptToCloud,
   saveScannedReceiptDraftToCloud,
   deleteReceiptFromCloud,
+  saveGoalToCloud,
+  updateGoalInCloud,
+  deleteGoalFromCloud,
 } from './services/supabaseService';
 
 export default function App() {
@@ -328,12 +331,19 @@ export default function App() {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const handleAddGoal = (goal: FinancialGoal) => {
+  const handleAddGoal = async (goal: FinancialGoal) => {
     setGoals((prev) => [goal, ...prev]);
+    await saveGoalToCloud(goal);
   };
 
-  const handleUpdateGoal = (goal: FinancialGoal) => {
+  const handleUpdateGoal = async (goal: FinancialGoal) => {
     setGoals((prev) => prev.map((g) => (g.id === goal.id ? goal : g)));
+    await updateGoalInCloud(goal);
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    setGoals((prev) => prev.filter((g) => g.id !== id));
+    await deleteGoalFromCloud(id);
   };
 
   const handleImportSpreadsheetRows = (newRows: SpreadsheetRow[]) => {
@@ -422,6 +432,7 @@ export default function App() {
             onAddFuelLog={handleAddFuelLog}
             onUpdateFuelLog={handleUpdateFuelLog}
             onDeleteFuelLog={handleDeleteFuelLog}
+            onDeleteGoal={handleDeleteGoal}
           />
         )}
 

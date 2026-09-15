@@ -532,7 +532,7 @@ export const ShoppingListView: React.FC<ShoppingListViewProps> = ({
   return (
     <div
       id="lista-compras-view"
-      className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-4 flex flex-col gap-6 font-sans animate-in fade-in duration-300"
+      className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-4 pb-24 md:pb-12 flex flex-col gap-6 font-sans animate-in fade-in duration-300"
     >
       {/* Toast Notification */}
       {toastMessage && (

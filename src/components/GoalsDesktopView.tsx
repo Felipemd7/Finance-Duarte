@@ -145,6 +145,9 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   goals = [],
   transactions = [],
   selectedMonth = 'Março 2026',
+  onAddGoal,
+  onUpdateGoal,
+  onDeleteGoal,
   fuelLogs: propFuelLogs,
   onAddFuelLog: propAddFuelLog,
   onUpdateFuelLog: propUpdateFuelLog,
@@ -320,6 +323,21 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
   const [editingCarCost, setEditingCarCost] = useState<CarPlanningItem | null>(null);
   const [isNewCarCostModalOpen, setIsNewCarCostModalOpen] = useState(false);
+
+  // States para Metas Financeiras Reais do Casal (Supabase)
+  const [isNewGoalModalOpen, setIsNewGoalModalOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<FinancialGoal | null>(null);
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalTarget, setGoalTarget] = useState('');
+  const [goalCurrent, setGoalCurrent] = useState('');
+  const [goalType, setGoalType] = useState<'economia' | 'gasto'>('economia');
+  const [goalPeriod, setGoalPeriod] = useState<'mensal' | 'anual' | 'unico'>('mensal');
+  const [goalUser, setGoalUser] = useState<'usr-felipe' | 'usr-genivania' | 'casal'>('casal');
+  const [goalDescription, setGoalDescription] = useState('');
+
+  // Quick Deposit Modal
+  const [depositModalGoal, setDepositModalGoal] = useState<FinancialGoal | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
 
   // Forms State for Category
   const [catName, setCatName] = useState('');
@@ -512,6 +530,106 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     onShowToast(`Custo "${newCarItem.title}" adicionado ao planejamento do veículo!`);
   };
 
+  // =========================================================================
+  // HANDLERS: Metas Financeiras do Casal (Sincronizadas com Supabase)
+  // =========================================================================
+  const handleOpenNewGoal = () => {
+    setEditingGoal(null);
+    setGoalTitle('');
+    setGoalTarget('');
+    setGoalCurrent('');
+    setGoalType('economia');
+    setGoalPeriod('mensal');
+    setGoalUser('casal');
+    setGoalDescription('');
+    setIsNewGoalModalOpen(true);
+  };
+
+  const handleOpenEditGoal = (goal: FinancialGoal) => {
+    setEditingGoal(goal);
+    setGoalTitle(goal.titulo || '');
+    setGoalTarget(String(goal.valorPlanejado || goal.valorAlvo || ''));
+    setGoalCurrent(String(goal.valorAtual || '0'));
+    setGoalType((goal.tipoMeta === 'gasto' || goal.tipo === 'teto_gasto') ? 'gasto' : 'economia');
+    setGoalPeriod((goal.periodo as any) || 'mensal');
+    setGoalUser((goal.usuarioId === 'usr-felipe' ? 'usr-felipe' : goal.usuarioId === 'usr-genivania' ? 'usr-genivania' : 'casal'));
+    setGoalDescription(goal.descricao || '');
+    setIsNewGoalModalOpen(true);
+  };
+
+  const handleSaveGoal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!goalTitle.trim()) return;
+
+    const targetVal = parseFloat(goalTarget.replace(',', '.')) || 0;
+    const currentVal = parseFloat(goalCurrent.replace(',', '.')) || 0;
+
+    if (editingGoal) {
+      const updated: FinancialGoal = {
+        ...editingGoal,
+        titulo: goalTitle.trim(),
+        valorPlanejado: targetVal,
+        valorAlvo: targetVal,
+        valorAtual: currentVal,
+        tipoMeta: goalType,
+        tipo: goalType === 'gasto' ? 'teto_gasto' : 'economia_poupanca',
+        periodo: goalPeriod,
+        usuarioId: goalUser,
+        descricao: goalDescription.trim() || undefined,
+      };
+      if (onUpdateGoal) onUpdateGoal(updated);
+      onShowToast(`Meta "${updated.titulo}" atualizada com sucesso!`);
+    } else {
+      const newGoal: FinancialGoal = {
+        id: 'goal-' + Date.now(),
+        titulo: goalTitle.trim(),
+        valorPlanejado: targetVal,
+        valorAlvo: targetVal,
+        valorAtual: currentVal,
+        tipoMeta: goalType,
+        tipo: goalType === 'gasto' ? 'teto_gasto' : 'economia_poupanca',
+        periodo: goalPeriod,
+        usuarioId: goalUser,
+        descricao: goalDescription.trim() || undefined,
+        alertaPercentual: 85,
+      };
+      if (onAddGoal) onAddGoal(newGoal);
+      onShowToast(`Meta "${newGoal.titulo}" criada com sucesso!`);
+    }
+
+    setIsNewGoalModalOpen(false);
+    setEditingGoal(null);
+  };
+
+  const handleDeleteGoalAction = (id: string, titulo: string) => {
+    if (confirm(`Deseja realmente remover a meta "${titulo}"?`)) {
+      if (onDeleteGoal) onDeleteGoal(id);
+      onShowToast(`Meta "${titulo}" removida.`);
+    }
+  };
+
+  const handleOpenDepositModal = (goal: FinancialGoal) => {
+    setDepositModalGoal(goal);
+    setDepositAmount('');
+  };
+
+  const handleSaveDeposit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!depositModalGoal) return;
+    const addAmt = parseFloat(depositAmount.replace(',', '.')) || 0;
+    if (addAmt <= 0) return;
+
+    const newCurrent = (depositModalGoal.valorAtual || 0) + addAmt;
+    const updated: FinancialGoal = {
+      ...depositModalGoal,
+      valorAtual: newCurrent,
+    };
+
+    if (onUpdateGoal) onUpdateGoal(updated);
+    setDepositModalGoal(null);
+    onShowToast(`Aporte de ${formatBRL(addAmt)} registrado na meta "${updated.titulo}"!`);
+  };
+
   // Helper to render icon for category
   const renderCategoryIcon = (iconName: string) => {
     switch (iconName) {
@@ -541,7 +659,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   };
 
   return (
-    <div id="metas-desktop-view" className="w-full max-w-7xl mx-auto pb-12">
+    <div id="metas-desktop-view" className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-0 pb-12">
       {/* ========================================================================= */}
       {/* TOP HEADER: Breadcrumbs, Title, Rateio Card & Actions                     */}
       {/* ========================================================================= */}
@@ -559,40 +677,217 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
         </div>
 
         {/* Right: Actions & Couple Rateio Card */}
-        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <button
-            onClick={handleOpenNewCategory}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#006948] text-white hover:bg-[#005a3c] text-xs font-bold shadow-[0_4px_14px_rgba(0,105,72,0.25)] transition-all cursor-pointer"
+            onClick={handleOpenNewGoal}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#006948] text-white hover:bg-[#005a3c] text-xs font-bold shadow-[0_4px_14px_rgba(0,105,72,0.25)] transition-all cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Novo Teto / Categoria</span>
+            <span>+ Nova Meta do Casal</span>
           </button>
 
-          <div className="bg-white rounded-2xl p-2.5 px-3.5 border border-[#e5eeff] shadow-[0_2px_8px_rgba(11,28,48,0.03)] flex items-center gap-3">
+          <button
+            onClick={handleOpenNewCategory}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#f0fdf4] text-[#006948] border border-[#bbf7d0] hover:bg-[#dcfce7] text-xs font-bold transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Teto / Categoria</span>
+          </button>
+
+          <div className="bg-white rounded-2xl p-2 px-3 border border-[#e5eeff] shadow-[0_2px_8px_rgba(11,28,48,0.03)] flex items-center gap-2.5">
             <div className="flex items-center -space-x-2">
               <div
-                className="w-8 h-8 rounded-full bg-[#2563eb] text-white font-bold text-xs flex items-center justify-center border-2 border-white shadow-2xs"
+                className="w-7 h-7 rounded-full bg-[#2563eb] text-white font-bold text-[11px] flex items-center justify-center border-2 border-white shadow-2xs"
                 title="Felipe Duarte"
               >
                 F
               </div>
               <div
-                className="w-8 h-8 rounded-full bg-[#ec4899] text-white font-bold text-xs flex items-center justify-center border-2 border-white shadow-2xs"
+                className="w-7 h-7 rounded-full bg-[#ec4899] text-white font-bold text-[11px] flex items-center justify-center border-2 border-white shadow-2xs"
                 title="Genivânia Duarte"
               >
                 G
               </div>
             </div>
-            <div className="text-left pr-2">
-              <span className="text-xs font-bold text-[#0b1c30] block">
+            <div className="text-left pr-1">
+              <span className="text-xs font-bold text-[#0b1c30] block leading-tight">
                 Casal Duarte
               </span>
-              <span className="text-[10px] text-[#006948] font-medium block">
+              <span className="text-[10px] text-[#006948] font-medium block leading-tight">
                 Felipe & Genivânia
               </span>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SEÇÃO PRINCIPAL: METAS FINANCEIRAS & POUPANÇA REAL DO CASAL (SUPABASE)   */}
+      {/* ========================================================================= */}
+      <div className="mb-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#006948] block">
+              PATRIMÔNIO & OBJETIVOS
+            </span>
+            <div className="flex items-center gap-3 mt-0.5">
+              <h2 className="font-display font-bold text-lg text-[#0b1c30] flex items-center gap-2">
+                <PiggyBank className="w-5 h-5 text-[#006948]" />
+                <span>Metas Financeiras & Poupança do Casal</span>
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#ecfdf5] text-[#006948] text-[10px] font-bold border border-[#a7f3d0]">
+                {goals.length} metas ativas
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleOpenNewGoal}
+            className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#ecfdf5] hover:bg-[#dcfce7] text-[#006948] text-xs font-bold border border-[#a7f3d0] transition-all cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Cadastrar Meta</span>
+          </button>
+        </div>
+
+        {goals.length === 0 ? (
+          <div className="py-8 px-4 text-center rounded-3xl bg-white border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center mb-3">
+              <Target className="w-6 h-6" />
+            </div>
+            <h4 className="text-sm font-bold text-[#0b1c30]">Nenhuma meta cadastrada no momento</h4>
+            <p className="text-xs text-[#565e74] max-w-md mt-1 mb-4">
+              Crie metas conjuntas para reservas de emergência, viagens, investimentos ou aquisições da família Duarte.
+            </p>
+            <button
+              onClick={handleOpenNewGoal}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#006948] text-white text-xs font-bold hover:bg-[#005a3c] cursor-pointer shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Criar Primeira Meta</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {goals.map((g) => {
+              const target = g.valorPlanejado || g.valorAlvo || 1;
+              const current = g.valorAtual || 0;
+              const pct = Math.min(100, Math.round((current / target) * 100));
+              const remaining = Math.max(0, target - current);
+              const isDone = current >= target && target > 0;
+              const isSaving = g.tipoMeta === 'economia' || g.tipo === 'economia_poupanca';
+
+              const responsibleLabel =
+                g.usuarioId === 'usr-felipe' ? 'Felipe' : g.usuarioId === 'usr-genivania' ? 'Genivânia' : 'Casal Duarte';
+
+              return (
+                <div
+                  key={g.id}
+                  className="bg-white rounded-2xl p-4 sm:p-5 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between relative group hover:shadow-md transition-shadow"
+                >
+                  <div>
+                    {/* Header do Card da Meta */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          isSaving ? 'bg-[#ecfdf5] text-[#006948]' : 'bg-[#eff4ff] text-[#006194]'
+                        }`}>
+                          {isSaving ? <PiggyBank className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-display font-bold text-xs sm:text-sm text-[#0b1c30] truncate" title={g.titulo}>
+                            {g.titulo}
+                          </h3>
+                          <span className="text-[10px] text-[#565e74]">
+                            {responsibleLabel} • {g.periodo || 'Mensal'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Ações: Editar e Excluir */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleOpenEditGoal(g)}
+                          className="p-1 rounded-lg text-[#565e74] hover:text-[#006948] hover:bg-[#eff4ff] transition-colors cursor-pointer"
+                          title="Editar meta"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGoalAction(g.id, g.titulo)}
+                          className="p-1 rounded-lg text-[#565e74] hover:text-[#ba1a1a] hover:bg-[#fee2e2] transition-colors cursor-pointer"
+                          title="Excluir meta"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Valores: Atual / Alvo */}
+                    <div className="flex items-baseline justify-between gap-2 mt-2">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[#565e74] block">
+                          Acumulado / Atual
+                        </span>
+                        <span className="font-display font-extrabold text-lg sm:text-xl text-[#0b1c30] font-mono">
+                          {formatBRL(current)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-bold text-[#565e74] block">
+                          Alvo Planejado
+                        </span>
+                        <span className="text-xs font-semibold text-[#565e74] font-mono">
+                          {formatBRL(target)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Barra de Progresso */}
+                    <div className="w-full bg-[#e5eeff] h-2 rounded-full overflow-hidden mt-3">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isDone ? 'bg-[#005a3c]' : 'bg-[#006948]'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {/* Status e Faltante */}
+                    <div className="flex items-center justify-between text-[11px] text-[#565e74] mt-1.5">
+                      <span className="font-bold text-[#006948]">
+                        {isDone ? '✓ Meta Conquistada!' : `${pct}% concluído`}
+                      </span>
+                      {!isDone && (
+                        <span>Faltam {formatBRL(remaining)}</span>
+                      )}
+                    </div>
+
+                    {g.descricao && (
+                      <p className="text-[11px] text-[#565e74] mt-2 pt-2 border-t border-[#f1f5f9] line-clamp-2" title={g.descricao}>
+                        {g.descricao}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Botão de Aporte Rápido */}
+                  <div className="mt-4 pt-3 border-t border-[#f1f5f9] flex items-center justify-between">
+                    <span className="text-[10px] text-[#565e74]">
+                      {isSaving ? 'Poupança / Investimento' : 'Teto de Despesa'}
+                    </span>
+                    <button
+                      onClick={() => handleOpenDepositModal(g)}
+                      className="flex items-center gap-1 px-3 py-1 rounded-xl bg-[#f0fdf4] hover:bg-[#dcfce7] text-[#006948] text-xs font-bold border border-[#bbf7d0] transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Aporte / Ajuste</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -1514,6 +1809,267 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-[#006948] text-white hover:bg-[#005a3c] shadow-xs cursor-pointer"
                 >
                   Cadastrar Custo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CRIAR OU EDITAR META FINANCEIRA DO CASAL                           */}
+      {/* ========================================================================= */}
+      {isNewGoalModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#e5eeff] animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
+                  <PiggyBank className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base text-[#0b1c30]">
+                    {editingGoal ? 'Editar Meta Financeira' : 'Nova Meta Financeira'}
+                  </h3>
+                  <span className="text-xs text-[#565e74]">
+                    Felipe & Genivânia Duarte
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsNewGoalModalOpen(false);
+                  setEditingGoal(null);
+                }}
+                className="p-1 rounded-full text-[#565e74] hover:bg-[#eff4ff]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGoal} className="flex flex-col gap-3.5 pt-4">
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Título da Meta *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Reserva de Emergência, Viagem Europa, Casa Própria"
+                  value={goalTitle}
+                  onChange={(e) => setGoalTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Valor Alvo / Meta (R$) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={goalTarget}
+                    onChange={(e) => setGoalTarget(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-sm font-bold text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Valor Já Acumulado (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={goalCurrent}
+                    onChange={(e) => setGoalCurrent(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-sm font-bold text-[#006948] focus:outline-none focus:border-[#006948]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Tipo de Meta
+                  </label>
+                  <select
+                    value={goalType}
+                    onChange={(e) => setGoalType(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  >
+                    <option value="economia">Poupança / Investimento</option>
+                    <option value="gasto">Teto de Despesa</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                    Periodicidade
+                  </label>
+                  <select
+                    value={goalPeriod}
+                    onChange={(e) => setGoalPeriod(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                  >
+                    <option value="mensal">Mensal</option>
+                    <option value="anual">Anual</option>
+                    <option value="unico">Objetivo Único / Livre</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Responsável
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGoalUser('casal')}
+                    className={`py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                      goalUser === 'casal'
+                        ? 'bg-[#ecfdf5] text-[#006948] border-[#a7f3d0]'
+                        : 'bg-[#f8faff] text-[#565e74] border-[#e5eeff]'
+                    }`}
+                  >
+                    Casal Duarte
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGoalUser('usr-felipe')}
+                    className={`py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                      goalUser === 'usr-felipe'
+                        ? 'bg-[#eff4ff] text-[#2563eb] border-[#b6c7ff]'
+                        : 'bg-[#f8faff] text-[#565e74] border-[#e5eeff]'
+                    }`}
+                  >
+                    Felipe
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGoalUser('usr-genivania')}
+                    className={`py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                      goalUser === 'usr-genivania'
+                        ? 'bg-[#fdf2f8] text-[#ec4899] border-[#fbcfe8]'
+                        : 'bg-[#f8faff] text-[#565e74] border-[#e5eeff]'
+                    }`}
+                  >
+                    Genivânia
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Descrição / Observações (Opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Aporte mensal na poupança ou CDB de liquidez diária"
+                  value={goalDescription}
+                  onChange={(e) => setGoalDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#f1f5f9] mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewGoalModalOpen(false);
+                    setEditingGoal(null);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold text-[#565e74] hover:bg-[#f1f5f9]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#006948] text-white hover:bg-[#005a3c] shadow-xs cursor-pointer"
+                >
+                  {editingGoal ? 'Salvar Alterações' : 'Criar Meta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: APORTE RÁPIDO NA META                                              */}
+      {/* ========================================================================= */}
+      {depositModalGoal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#e5eeff] animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#f1f5f9]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#ecfdf5] text-[#006948] flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-sm text-[#0b1c30]">
+                    Registrar Aporte
+                  </h3>
+                  <span className="text-[11px] text-[#565e74] truncate max-w-[200px] block" title={depositModalGoal.titulo}>
+                    {depositModalGoal.titulo}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setDepositModalGoal(null)}
+                className="p-1 rounded-full text-[#565e74] hover:bg-[#eff4ff]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDeposit} className="flex flex-col gap-3.5 pt-4">
+              <div className="bg-[#f8faff] p-3 rounded-2xl border border-[#e5eeff]">
+                <div className="flex justify-between text-xs text-[#565e74]">
+                  <span>Acumulado Atual:</span>
+                  <span className="font-bold text-[#0b1c30]">{formatBRL(depositModalGoal.valorAtual || 0)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-[#565e74] mt-1">
+                  <span>Alvo da Meta:</span>
+                  <span className="font-semibold">{formatBRL(depositModalGoal.valorPlanejado || depositModalGoal.valorAlvo || 0)}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
+                  Valor do Novo Aporte (R$) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  autoFocus
+                  placeholder="0.00"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-base font-extrabold text-[#006948] font-mono focus:outline-none focus:border-[#006948]"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDepositModalGoal(null)}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold text-[#565e74] hover:bg-[#f1f5f9]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-[#006948] text-white hover:bg-[#005a3c] shadow-xs cursor-pointer"
+                >
+                  Confirmar Aporte
                 </button>
               </div>
             </form>
