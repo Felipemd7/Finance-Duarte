@@ -125,7 +125,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     if (s.includes('carro') || s.includes('manuten') || s.includes('seguro') || s.includes('rastreador') || s.includes('ipva')) {
       return { icon: Car, bg: 'bg-[#eff4ff] text-[#006194] border-[#dce9ff]', label: 'Carro' };
     }
-    if (s.includes('farm') || s.includes('saude') || s.includes('saúde') || s.includes('medic')) {
+    if (s.includes('farm') || s.includes('saude') || s.includes('saúde') || s.includes('medic') || s.includes('exame')) {
       return { icon: Pill, bg: 'bg-[#fff1f2] text-[#e11d48] border-[#fecdd3]', label: 'Farmácia & Saúde' };
     }
     if (s.includes('lazer') || s.includes('restaurante') || s.includes('jantar')) {

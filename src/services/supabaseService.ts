@@ -334,7 +334,7 @@ export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string
   if (norm.includes('estacionamento') || norm.includes('estac') || norm.includes('pedagio') || norm.includes('pedágio')) return 'sub-estacionamento';
   if (norm.includes('supermercado') || norm.includes('mercado') || norm.includes('comida') || norm.includes('frigor')) return 'sub-supermercado';
   if (norm.includes('combust') || norm.includes('posto') || norm.includes('gasolina')) return 'sub-combustivel';
-  if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio')) return 'sub-farmacia';
+  if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio') || norm.includes('exame')) return 'sub-farmacia';
   if (norm.includes('lazer') || norm.includes('restaurante') || norm.includes('bar')) return 'sub-lazer';
   if (norm.includes('luz') || norm.includes('energia')) return 'sub-luz';
   if (norm.includes('agua') || norm.includes('água')) return 'sub-agua';
