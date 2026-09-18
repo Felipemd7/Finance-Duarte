@@ -61,8 +61,10 @@ export type EstablishmentType =
   | 'Supermercado'
   | 'Farmácia'
   | 'Posto de combustível'
-  | 'Oficina'
+  | 'Estacionamento'
   | 'Restaurante/Lazer'
+  | 'Oficina'
+  | 'Pedágio'
   | 'Serviços'
   | 'Outros';
 

@@ -262,6 +262,14 @@ export default function App() {
           ? 'Farmácia'
           : receipt.tipoEstabelecimento === 'Posto de combustível'
           ? 'Combustível'
+          : receipt.tipoEstabelecimento === 'Estacionamento'
+          ? 'Estacionamento'
+          : receipt.tipoEstabelecimento === 'Restaurante/Lazer'
+          ? 'Lazer'
+          : receipt.tipoEstabelecimento === 'Pedágio'
+          ? 'Pedágio'
+          : receipt.tipoEstabelecimento === 'Oficina'
+          ? 'Manutenção Veículo'
           : 'Supermercado',
       estabelecimento: receipt.estabelecimento,
       valor: receipt.valorTotal,

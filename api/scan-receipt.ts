@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { normalizeReceiptData } from '../src/services/receiptNormalizer';
 
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
@@ -139,21 +140,39 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const prompt = `Você é um auditor fiscal de despesas domésticas para um casal (Felipe Duarte & Genivânia Duarte).
-Analise com atenção máxima a imagem anexada deste comprovante, cupom fiscal NFC-e, nota fiscal SAT ou cupom tradicional.
+    const prompt = `Você é um auditor fiscal de despesas domésticas para o casal Felipe Duarte & Genivânia Duarte.
+Analise com extrema precisão a imagem anexada deste comprovante (pode ser cupom NFC-e, nota fiscal SAT, comprovante de maquininha de cartão / POS / TEF / via cliente, ou ticket).
 
-Instruções fundamentais:
-1. Extraia o nome amigável do estabelecimento comercial (Ex: "Atacadão", "Pão de Açúcar", "Drogaria Pacheco", "Supermercado Carvalho").
-2. Identifique o tipo do estabelecimento: "Supermercado", "Farmácia", "Posto de combustível", "Restaurante", "Loja" ou "Outros".
-3. Extraia a data no formato "AAAA-MM-DD" ou "DD/MM/AAAA".
-4. Extraia o valor total pago no cupom fiscal (valorTotal).
-5. Extraia TODOS os itens com preço e quantidade.
-6. REGRA DE DESMEMBRAMENTO PARA FARMÁCIA/SAÚDE: Se encontrar produtos de saúde/medicamentos (ex: dorflex, dipirona, vitaminas) comprados em supermercado, marque "desmembrado: true" e preencha "motivoDesmembramento".
+REGRAS CRÍTICAS DE AUDITORIA:
+1. REGRA ANTI-MAQUININHA: NUNCA use a marca da maquininha de cartão ou da adquirente (como "laranjinha", "itau", "itaú", "rede", "cielo", "stone", "pagbank", "pagseguro", "getnet", "safrapay", "vero", "moderninha", "bin", "ticket") como o nome do estabelecimento!
+   - Procure SEMPRE pelo nome do estabelecimento comercial real (ex: "POSTO MARTINES", "DROGARIA PAGUE MENOS", "TERESINA ADM DE SHOPPING", "PINHEIRO E REGADAS").
+   - Dica: Em filipetas de cartão, o nome do posto/loja e o CNPJ geralmente ficam logo abaixo dos dados de pagamento ou no rodapé.
+2. NOME FANTASIA vs RAZÃO SOCIAL: Priorize o Nome Fantasia comercial amigável (ex: "Shopping Rio Poty", "Posto Martines", "Pague Menos").
+3. CLASSIFICAÇÃO RIGOROSA DO TIPO DO ESTABELECIMENTO ("tipoEstabelecimento"):
+   - "Posto de combustível": se for posto de gasolina, diesel, etanol, abastecimento (ex: Posto Martines, Shell, Petrobras, Ipiranga).
+   - "Farmácia": se for drogaria, farmácia de manipulação ou compra de medicamentos/higiene.
+   - "Estacionamento": se for ticket de estacionamento de shopping, rotativo, valet ou pedágio (ex: "ROT. EXTERN", Teresina Shopping, Estapar, Indigo).
+   - "Restaurante/Lazer": se for lanchonete, restaurante, hamburgueria, cafeteria, bar, cinema, entretenimento.
+   - "Supermercado": se for supermercado, atacado, hipermercado, padaria, hortifrúti.
+   - "Oficina": oficina mecânica, autopeças, pneus, lava-jato.
+   - "Serviços" ou "Outros".
+4. SUGESTÃO DE SUBCATEGORIA ("subcategoriaSugerida"):
+   - Para Posto de combustível: "Combustível"
+   - Para Farmácia: "Farmácia"
+   - Para Estacionamento: "Estacionamento"
+   - Para Restaurante/Lazer: "Lazer"
+   - Para Supermercado: "Supermercado"
+5. SE FOR COMPROVANTE DE CARTÃO (sem lista detalhada de produtos):
+   - Crie 1 item sintético com o valor total (ex: nome: "Abastecimento de Combustível" se for posto, "Estacionamento Rotativo" se for shopping, "Consumo / Refeição" se for lanchonete).
+6. REGRA DE DESMEMBRAMENTO: Se encontrar produtos de saúde/remédios (ex: dorflex, dipirona, luftal) em compras de supermercado, marque "desmembrado: true" e preencha "motivoDesmembramento".
 
 Retorne ESTRITAMENTE em formato JSON com o seguinte schema:
 {
   "estabelecimento": "string",
+  "razaoSocial": "string",
+  "nomeFantasia": "string",
   "tipoEstabelecimento": "string",
+  "subcategoriaSugerida": "string",
   "data": "string",
   "numeroCupom": "string",
   "cnpj": "string",
@@ -234,8 +253,21 @@ Retorne ESTRITAMENTE em formato JSON com o seguinte schema:
       });
     }
 
-    const total = Number(parsedData.valorTotal) || 0;
-    const itensWithIds = (parsedData.itens || []).map((it: any, idx: number) => ({
+    const normalized = normalizeReceiptData(parsedData);
+    const resolvedData = {
+      ...parsedData,
+      estabelecimento: normalized.estabelecimento,
+      razaoSocial: normalized.razaoSocial || parsedData.razaoSocial,
+      nomeFantasia: normalized.nomeFantasia || parsedData.nomeFantasia,
+      tipoEstabelecimento: normalized.tipoEstabelecimento,
+      subcategoriaSugerida: normalized.subcategoriaSugerida,
+      cnpj: normalized.cnpj || parsedData.cnpj,
+      endereco: normalized.cidade || parsedData.endereco,
+      itens: normalized.itens.length > 0 ? normalized.itens : parsedData.itens || [],
+    };
+
+    const total = Number(resolvedData.valorTotal) || 0;
+    const itensWithIds = (resolvedData.itens || []).map((it: any, idx: number) => ({
       id: `item-${Date.now()}-${idx}`,
       ...it,
     }));
@@ -244,7 +276,7 @@ Retorne ESTRITAMENTE em formato JSON com o seguinte schema:
       success: true,
       source: modelUsed,
       data: {
-        ...parsedData,
+        ...resolvedData,
         itens: itensWithIds,
         divisaoCasal: {
           porcentagemFelipe: 50,

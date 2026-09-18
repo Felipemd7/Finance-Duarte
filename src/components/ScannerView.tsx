@@ -39,8 +39,10 @@ import {
   Link2,
   Video,
   VideoOff,
+  Car,
+  Utensils,
 } from 'lucide-react';
-import { Receipt, PurchaseItem } from '../types';
+import { Receipt, PurchaseItem, EstablishmentType } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { analyzeReceiptDirect } from '../services/clientOcrService';
 import { compressImage } from '../utils/imageCompressor';
@@ -155,6 +157,7 @@ const mapReceiptToViewModel = (r: any) => {
     endereco: String(r.endereco || 'Teresina, PI'),
     ccf: String(r.ccf || ''),
     totalLido: Number(r.valorTotal) || Number(r.totalLido) || 0,
+    tipoEstabelecimento: (r.tipoEstabelecimento as EstablishmentType) || 'Supermercado',
     meioPagamento: String(r.meioPagamento || r.formaPagamento || 'Cartão conjunto Inter'),
     comprador: String(r.comprador || r.pagoPor || 'Felipe Duarte & Genivânia Duarte'),
     itens: items,
@@ -198,6 +201,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       numeroCupom: 'Nenhum cupom ativo',
       dataHora: new Date().toLocaleDateString('pt-BR'),
       estabelecimento: 'Aguardando comprovante',
+      tipoEstabelecimento: 'Supermercado' as EstablishmentType,
       cnpj: '',
       ie: '',
       endereco: 'Teresina, PI',
@@ -569,6 +573,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             d.comprador && d.comprador !== 'Não identificado'
               ? d.comprador
               : 'Felipe Duarte & Genivânia Duarte',
+          tipoEstabelecimento: (d.tipoEstabelecimento as EstablishmentType) || 'Supermercado',
           itens: mappedItems,
         };
 
@@ -578,18 +583,11 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
         // Salvar rascunho no Supabase para garantir persistência na nuvem
         if (onSaveReceiptDraft) {
-          const isFarm =
-            newReceiptModel.estabelecimento.toLowerCase().includes('farm') ||
-            newReceiptModel.estabelecimento.toLowerCase().includes('droga');
-          const isGas =
-            newReceiptModel.estabelecimento.toLowerCase().includes('posto') ||
-            newReceiptModel.estabelecimento.toLowerCase().includes('combust');
-
           const draftObj: Receipt = {
             id: newReceiptId,
             data: rawDate,
             estabelecimento: newReceiptModel.estabelecimento,
-            tipoEstabelecimento: isFarm ? 'Farmácia' : isGas ? 'Posto de combustível' : 'Supermercado',
+            tipoEstabelecimento: newReceiptModel.tipoEstabelecimento,
             numeroCupom: newReceiptModel.numeroCupom,
             valorTotal: totalCalculated,
             status: 'Pendente',
@@ -668,18 +666,11 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     setIsSavingReceipt(true);
     showToast('Salvando no banco de dados e conciliando na conta central do casal...');
 
-    const isFarmacia =
-      extractedReceipt.estabelecimento.toLowerCase().includes('farm') ||
-      extractedReceipt.estabelecimento.toLowerCase().includes('droga');
-    const isPosto =
-      extractedReceipt.estabelecimento.toLowerCase().includes('posto') ||
-      extractedReceipt.estabelecimento.toLowerCase().includes('combust');
-
     const approvedReceiptObj: Receipt = {
       id: extractedReceipt.id || `nfc-${Date.now()}`,
       data: extractedReceipt.dataHora || new Date().toISOString(),
       estabelecimento: extractedReceipt.estabelecimento,
-      tipoEstabelecimento: isFarmacia ? 'Farmácia' : isPosto ? 'Posto de combustível' : 'Supermercado',
+      tipoEstabelecimento: extractedReceipt.tipoEstabelecimento || 'Supermercado',
       numeroCupom: extractedReceipt.numeroCupom,
       valorTotal: extractedReceipt.totalLido,
       status: 'Conciliado',
@@ -880,6 +871,37 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               <span className="font-display font-extrabold text-xl text-[#0b1c30] font-mono leading-tight">
                 {formatBRL(extractedReceipt.totalLido)}
               </span>
+            </div>
+          </div>
+
+          {/* Edição Rápida de Estabelecimento & Categoria (Mobile) */}
+          <div className="mt-3 pt-2.5 border-t border-[#f1f5f9] grid grid-cols-1 gap-2">
+            <div>
+              <span className="text-[10px] text-[#565e74] font-medium block">Nome do Estabelecimento:</span>
+              <input
+                type="text"
+                value={extractedReceipt.estabelecimento}
+                onChange={(e) => setExtractedReceipt({ ...extractedReceipt, estabelecimento: e.target.value })}
+                className="w-full mt-0.5 bg-[#f8faff] border border-[#e5eeff] rounded-xl px-2.5 py-1.5 text-xs font-bold text-[#0b1c30] focus:border-[#006948] focus:outline-none"
+              />
+            </div>
+            <div>
+              <span className="text-[10px] text-[#565e74] font-medium block">Categoria / Ramo:</span>
+              <select
+                value={extractedReceipt.tipoEstabelecimento || 'Supermercado'}
+                onChange={(e) => setExtractedReceipt({ ...extractedReceipt, tipoEstabelecimento: e.target.value as EstablishmentType })}
+                className="w-full mt-0.5 bg-[#f8faff] border border-[#e5eeff] rounded-xl px-2 py-1.5 text-xs font-bold text-[#0b1c30] focus:border-[#006948] focus:outline-none cursor-pointer"
+              >
+                <option value="Supermercado">🛒 Supermercado</option>
+                <option value="Posto de combustível">⛽ Posto de Combustível</option>
+                <option value="Farmácia">💊 Farmácia</option>
+                <option value="Estacionamento">🚗 Estacionamento</option>
+                <option value="Restaurante/Lazer">🍔 Restaurante / Lazer</option>
+                <option value="Oficina">🔧 Oficina Mecânica</option>
+                <option value="Pedágio">🛣️ Pedágio</option>
+                <option value="Serviços">💼 Serviços</option>
+                <option value="Outros">📦 Outros</option>
+              </select>
             </div>
           </div>
 
@@ -1310,19 +1332,45 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             <div className="lg:col-span-8 p-6 flex flex-col justify-between">
               <div>
                 {/* Top 4 metadata cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pb-5 border-b border-[#f1f5f9]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pb-5 border-b border-[#f1f5f9]">
                   <div>
-                    <span className="text-[10px] text-[#565e74] block">Estabelecimento</span>
-                    <span className="font-bold text-xs text-[#0b1c30] block mt-0.5 truncate" title={extractedReceipt.estabelecimento}>
-                      {extractedReceipt.estabelecimento}
-                    </span>
+                    <span className="text-[10px] text-[#565e74] block font-medium">Estabelecimento</span>
+                    <input
+                      type="text"
+                      value={extractedReceipt.estabelecimento}
+                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, estabelecimento: e.target.value })}
+                      className="w-full mt-0.5 bg-[#f8faff] border border-[#e5eeff] rounded-lg px-2 py-1 text-xs font-bold text-[#0b1c30] focus:border-[#006948] focus:outline-none"
+                      title="Nome do estabelecimento comercial"
+                    />
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-[#565e74] block">Data da Compra</span>
-                    <span className="font-bold text-xs text-[#0b1c30] block mt-0.5">
-                      {extractedReceipt.dataHora.slice(0, 10)}
-                    </span>
+                    <span className="text-[10px] text-[#565e74] block font-medium">Categoria / Ramo</span>
+                    <select
+                      value={extractedReceipt.tipoEstabelecimento || 'Supermercado'}
+                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, tipoEstabelecimento: e.target.value as EstablishmentType })}
+                      className="w-full mt-0.5 bg-[#f8faff] border border-[#e5eeff] rounded-lg px-1.5 py-1 text-xs font-bold text-[#0b1c30] focus:border-[#006948] focus:outline-none cursor-pointer"
+                    >
+                      <option value="Supermercado">🛒 Supermercado</option>
+                      <option value="Posto de combustível">⛽ Posto de Combustível</option>
+                      <option value="Farmácia">💊 Farmácia</option>
+                      <option value="Estacionamento">🚗 Estacionamento</option>
+                      <option value="Restaurante/Lazer">🍔 Restaurante / Lazer</option>
+                      <option value="Oficina">🔧 Oficina Mecânica</option>
+                      <option value="Pedágio">🛣️ Pedágio</option>
+                      <option value="Serviços">💼 Serviços</option>
+                      <option value="Outros">📦 Outros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-[#565e74] block font-medium">Data da Compra</span>
+                    <input
+                      type="text"
+                      value={extractedReceipt.dataHora.slice(0, 10)}
+                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, dataHora: e.target.value })}
+                      className="w-full mt-0.5 bg-[#f8faff] border border-[#e5eeff] rounded-lg px-2 py-1 text-xs font-bold text-[#0b1c30] focus:border-[#006948] focus:outline-none"
+                    />
                   </div>
 
                   <div>
@@ -1586,6 +1634,8 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     const isSelected = extractedReceipt.id === item.id;
                     const isFarmacia = (item.tipoEstabelecimento || '').toLowerCase().includes('farm');
                     const isPosto = (item.tipoEstabelecimento || '').toLowerCase().includes('posto');
+                    const isEstacionamento = (item.tipoEstabelecimento || '').toLowerCase().includes('estacionamento') || (item.tipoEstabelecimento || '').toLowerCase().includes('pedágio');
+                    const isLazer = (item.tipoEstabelecimento || '').toLowerCase().includes('lazer') || (item.tipoEstabelecimento || '').toLowerCase().includes('restaurante');
 
                     return (
                       <tr
@@ -1606,6 +1656,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                                   ? 'bg-[#fee2e2] text-[#dc2626]'
                                   : isPosto
                                   ? 'bg-[#eff4ff] text-[#006194]'
+                                  : isEstacionamento
+                                  ? 'bg-[#fef3c7] text-[#d97706]'
+                                  : isLazer
+                                  ? 'bg-[#fae8ff] text-[#a855f7]'
                                   : 'bg-[#ecfdf5] text-[#006948]'
                               }`}
                             >
@@ -1613,6 +1667,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                                 <Pill className="w-3.5 h-3.5" />
                               ) : isPosto ? (
                                 <Fuel className="w-3.5 h-3.5" />
+                              ) : isEstacionamento ? (
+                                <Car className="w-3.5 h-3.5" />
+                              ) : isLazer ? (
+                                <Utensils className="w-3.5 h-3.5" />
                               ) : (
                                 <ShoppingCart className="w-3.5 h-3.5" />
                               )}

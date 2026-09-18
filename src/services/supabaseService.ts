@@ -329,6 +329,8 @@ export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string
   if (norm.includes('internet') || norm.includes('tv')) return 'sub-internet';
   if (norm.includes('rastreador')) return 'sub-rastreador';
   if (norm.includes('seguro')) return 'sub-seguro';
+  if (norm.includes('estacionamento') || norm.includes('estac')) return 'sub-estacionamento';
+  if (norm.includes('pedagio') || norm.includes('pedágio')) return 'sub-pedagio';
   if (norm.includes('supermercado') || norm.includes('mercado') || norm.includes('comida') || norm.includes('frigor')) return 'sub-supermercado';
   if (norm.includes('combust') || norm.includes('posto') || norm.includes('gasolina')) return 'sub-combustivel';
   if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio')) return 'sub-farmacia';
@@ -672,14 +674,22 @@ export async function saveScannedReceiptToCloud(
         mes_referencia: txMes,
         valor: transaction.valor,
         tipo: 'despesa',
-        forma_pagamento: 'credito',
-        status: 'pago',
+        forma_pagamento: transaction.formaPagamento || 'Cartão conjunto Inter',
+        status: transaction.status === 'pendente' ? 'previsto' : 'pago',
         categoria_id: 'cat-variavel',
         subcategoria_id:
           receipt.tipoEstabelecimento === 'Farmácia'
             ? 'sub-farmacia'
             : receipt.tipoEstabelecimento === 'Posto de combustível'
             ? 'sub-combustivel'
+            : receipt.tipoEstabelecimento === 'Estacionamento'
+            ? 'sub-estacionamento'
+            : receipt.tipoEstabelecimento === 'Restaurante/Lazer'
+            ? 'sub-lazer'
+            : receipt.tipoEstabelecimento === 'Pedágio'
+            ? 'sub-pedagio'
+            : receipt.tipoEstabelecimento === 'Oficina'
+            ? 'sub-manutencao-carro'
             : 'sub-supermercado',
         estabelecimento_nome: receipt.estabelecimento,
         observacoes: transaction.observacoes || null,
