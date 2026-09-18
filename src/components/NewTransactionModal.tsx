@@ -198,7 +198,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
 
   const subcategoryOptions: Record<CategoryType, string[]> = {
     Invariável: ['Aluguel', 'Condomínio', 'Seguro (Carro)', 'Rastreador', 'Internet / TV', 'Assinaturas Extras'],
-    Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Estacionamento', 'Lazer', 'Manutenção de carro', 'Energia Elétrica / Luz', 'Água', 'Gás', 'Pedágio', 'Uber / Transporte'],
+    Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Estacionamento', 'Lazer', 'Manutenção de carro', 'Energia Elétrica / Luz', 'Água', 'Gás', 'Uber / Transporte'],
     'Extra/Eventualidades': ['IPVA', 'Presentes & Comemorações', 'Médico / Exames', 'Viagem', 'Manutenção Casa', 'Eventualidades'],
   };
 

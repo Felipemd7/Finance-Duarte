@@ -329,8 +329,7 @@ export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string
   if (norm.includes('internet') || norm.includes('tv')) return 'sub-internet';
   if (norm.includes('rastreador')) return 'sub-rastreador';
   if (norm.includes('seguro')) return 'sub-seguro';
-  if (norm.includes('estacionamento') || norm.includes('estac')) return 'sub-estacionamento';
-  if (norm.includes('pedagio') || norm.includes('pedágio')) return 'sub-pedagio';
+  if (norm.includes('estacionamento') || norm.includes('estac') || norm.includes('pedagio') || norm.includes('pedágio')) return 'sub-estacionamento';
   if (norm.includes('supermercado') || norm.includes('mercado') || norm.includes('comida') || norm.includes('frigor')) return 'sub-supermercado';
   if (norm.includes('combust') || norm.includes('posto') || norm.includes('gasolina')) return 'sub-combustivel';
   if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio')) return 'sub-farmacia';
@@ -682,12 +681,10 @@ export async function saveScannedReceiptToCloud(
             ? 'sub-farmacia'
             : receipt.tipoEstabelecimento === 'Posto de combustível'
             ? 'sub-combustivel'
-            : receipt.tipoEstabelecimento === 'Estacionamento'
+            : receipt.tipoEstabelecimento === 'Estacionamento' || receipt.tipoEstabelecimento === 'Pedágio'
             ? 'sub-estacionamento'
             : receipt.tipoEstabelecimento === 'Restaurante/Lazer'
             ? 'sub-lazer'
-            : receipt.tipoEstabelecimento === 'Pedágio'
-            ? 'sub-pedagio'
             : receipt.tipoEstabelecimento === 'Oficina'
             ? 'sub-manutencao-carro'
             : 'sub-supermercado',

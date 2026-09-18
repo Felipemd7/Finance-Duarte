@@ -262,12 +262,10 @@ export default function App() {
           ? 'Farmácia'
           : receipt.tipoEstabelecimento === 'Posto de combustível'
           ? 'Combustível'
-          : receipt.tipoEstabelecimento === 'Estacionamento'
+          : receipt.tipoEstabelecimento === 'Estacionamento' || receipt.tipoEstabelecimento === 'Pedágio'
           ? 'Estacionamento'
           : receipt.tipoEstabelecimento === 'Restaurante/Lazer'
           ? 'Lazer'
-          : receipt.tipoEstabelecimento === 'Pedágio'
-          ? 'Pedágio'
           : receipt.tipoEstabelecimento === 'Oficina'
           ? 'Manutenção Veículo'
           : 'Supermercado',

@@ -188,8 +188,8 @@ export function normalizeReceiptData(data: any): NormalizedReceiptOutput {
     fullTextName.includes('via 040') ||
     fullTextName.includes('concessionaria')
   ) {
-    tipoEstabelecimento = 'Pedágio';
-    subcategoriaSugerida = 'Pedágio';
+    tipoEstabelecimento = 'Estacionamento';
+    subcategoriaSugerida = 'Estacionamento';
   }
 
   // 4. Analisar itens para refinar a categoria se ainda houver dúvida

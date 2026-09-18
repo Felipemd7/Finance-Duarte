@@ -42,8 +42,7 @@ export const CATEGORIES_CONFIG: CategoryBudget[] = [
   { nome: 'Combustível', categoria: 'Variável', orcamentoPadrao: 650, icone: 'fuel', isCarro: true },
   { nome: 'Farmácia', categoria: 'Variável', orcamentoPadrao: 350, icone: 'pill' },
   { nome: 'Lazer', categoria: 'Variável', orcamentoPadrao: 1200, icone: 'party-popper' },
-  { nome: 'Estacionamento', categoria: 'Variável', orcamentoPadrao: 120, icone: 'square-parking', isCarro: true },
-  { nome: 'Pedágio', categoria: 'Variável', orcamentoPadrao: 80, icone: 'milestone', isCarro: true },
+  { nome: 'Estacionamento', categoria: 'Variável', orcamentoPadrao: 200, icone: 'square-parking', isCarro: true },
 
   // Extra/Eventualidades
   { nome: 'Manutenção de carro', categoria: 'Extra/Eventualidades', orcamentoPadrao: 400, icone: 'wrench', isCarro: true },

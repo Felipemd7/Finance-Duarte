@@ -898,7 +898,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 <option value="Estacionamento">🚗 Estacionamento</option>
                 <option value="Restaurante/Lazer">🍔 Restaurante / Lazer</option>
                 <option value="Oficina">🔧 Oficina Mecânica</option>
-                <option value="Pedágio">🛣️ Pedágio</option>
                 <option value="Serviços">💼 Serviços</option>
                 <option value="Outros">📦 Outros</option>
               </select>
@@ -1357,7 +1356,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                       <option value="Estacionamento">🚗 Estacionamento</option>
                       <option value="Restaurante/Lazer">🍔 Restaurante / Lazer</option>
                       <option value="Oficina">🔧 Oficina Mecânica</option>
-                      <option value="Pedágio">🛣️ Pedágio</option>
                       <option value="Serviços">💼 Serviços</option>
                       <option value="Outros">📦 Outros</option>
                     </select>
