@@ -32,11 +32,12 @@ import {
   deleteGoalFromCloud,
   updateTransactionInCloud,
 } from './services/supabaseService';
+import { getCurrentMonthName } from './utils/formatters';
 
 export default function App() {
   // Current active tab - default to 'dashboard' (Visão Consolidada do Casal)
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
-  const [selectedMonth, setSelectedMonth] = useState<string>('Março 2026');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => getCurrentMonthName());
   const [activeUser, setActiveUser] = useState<string>('casal');
   const [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null);
 
@@ -486,6 +487,7 @@ export default function App() {
             spreadsheets={spreadsheets}
             onNavigateToTab={setCurrentTab}
             onOpenNewTx={() => setIsNewTxModalOpen(true)}
+            onSelectMonth={setSelectedMonth}
           />
         )}
 

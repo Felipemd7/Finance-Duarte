@@ -44,7 +44,7 @@ import {
   Gauge,
 } from 'lucide-react';
 import { Receipt, PurchaseItem, EstablishmentType, FuelLog } from '../types';
-import { formatBRL } from '../utils/formatters';
+import { formatBRL, getCurrentMonthName } from '../utils/formatters';
 import { analyzeReceiptDirect } from '../services/clientOcrService';
 import { compressImage } from '../utils/imageCompressor';
 
@@ -61,7 +61,7 @@ interface ScannerViewProps {
 }
 
 const getMonthNameFromDate = (dateStr: string): string => {
-  if (!dateStr) return 'Março 2026';
+  if (!dateStr) return getCurrentMonthName();
   // Normalizar se for dd/mm/yyyy
   if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) {
     const parts = dateStr.split('/');
@@ -80,7 +80,7 @@ const getMonthNameFromDate = (dateStr: string): string => {
       '11': 'Novembro 2026',
       '12': 'Dezembro 2026',
     };
-    return map[month] || 'Março 2026';
+    return map[month] || getCurrentMonthName();
   }
   const parts = dateStr.split('-');
   if (parts.length >= 2) {
@@ -98,9 +98,9 @@ const getMonthNameFromDate = (dateStr: string): string => {
       '11': 'Novembro 2026',
       '12': 'Dezembro 2026',
     };
-    return map[parts[1]] || 'Março 2026';
+    return map[parts[1]] || getCurrentMonthName();
   }
-  return 'Março 2026';
+  return getCurrentMonthName();
 };
 
 const mapReceiptToViewModel = (r: any) => {

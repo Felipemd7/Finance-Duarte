@@ -64,3 +64,24 @@ export function getMonthName(mesAno: string): string {
   return mesAno;
 }
 
+// Retorna o mês e ano corrente por extenso (ex: "Setembro 2026")
+export function getCurrentMonthName(): string {
+  const meses = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+  const now = new Date();
+  const mes = meses[now.getMonth()];
+  const ano = now.getFullYear();
+  return `${mes} ${ano}`;
+}
+
+// Retorna o código do mês e ano corrente (ex: "2026-09")
+export function getCurrentMonthCode(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+

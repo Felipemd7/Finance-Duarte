@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FinancialGoal, Transaction, FuelLog } from '../types';
 import { GoalsDesktopView } from './GoalsDesktopView';
+import { getCurrentMonthName } from '../utils/formatters';
 
 interface GoalsViewProps {
   goals?: FinancialGoal[];
@@ -18,7 +19,7 @@ interface GoalsViewProps {
 export const GoalsView: React.FC<GoalsViewProps> = ({
   goals = [],
   transactions = [],
-  selectedMonth = 'Março 2026',
+  selectedMonth = getCurrentMonthName(),
   onAddGoal,
   onUpdateGoal,
   onDeleteGoal,

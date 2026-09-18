@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { FinancialGoal, FuelLog, Transaction } from '../types';
 import { INITIAL_FUEL_LOGS } from '../data/initialData';
-import { formatBRL } from '../utils/formatters';
+import { formatBRL, getCurrentMonthName, getCurrentMonthCode } from '../utils/formatters';
 import { FuelManagementSection } from './FuelManagementSection';
 
 export interface BudgetCategoryItem {
@@ -144,7 +144,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   onShowToast,
   goals = [],
   transactions = [],
-  selectedMonth = 'Março 2026',
+  selectedMonth = getCurrentMonthName(),
   onAddGoal,
   onUpdateGoal,
   onDeleteGoal,
@@ -155,7 +155,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 }) => {
   // Converte nome do mês para código 'YYYY-MM'
   const activeMonthCode = useMemo(() => {
-    if (!selectedMonth) return '2026-03';
+    if (!selectedMonth) return getCurrentMonthCode();
     const match = selectedMonth.match(/(\d{4})-(\d{2})/);
     if (match) return `${match[1]}-${match[2]}`;
     const monthsMap: Record<string, string> = {
@@ -177,7 +177,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     for (const [name, code] of Object.entries(monthsMap)) {
       if (lower.includes(name)) return code;
     }
-    return '2026-03';
+    return getCurrentMonthCode();
   }, [selectedMonth]);
 
   // Transações do mês ativo

@@ -48,6 +48,7 @@ interface DashboardViewProps {
   spreadsheets: SpreadsheetRow[];
   onNavigateToTab: (tab: string) => void;
   onOpenNewTx?: () => void;
+  onSelectMonth?: (mes: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -57,6 +58,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   spreadsheets,
   onNavigateToTab,
   onOpenNewTx,
+  onSelectMonth,
 }) => {
   // Filter Person state for table and summary
   const [filterPerson, setFilterPerson] = useState<'todos' | 'felipe' | 'genivania'>('todos');
@@ -357,9 +359,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="flex flex-col items-end shrink-0">
-            <span className="px-2.5 py-1 rounded-full bg-[#eff4ff] text-[#006194] text-[11px] font-bold border border-[#dce9ff]">
-              {selectedMonth}
-            </span>
+            {onSelectMonth ? (
+              <select
+                value={selectedMonth}
+                onChange={(e) => onSelectMonth(e.target.value)}
+                className="px-2.5 py-1 rounded-full bg-[#eff4ff] text-[#006194] text-[11px] font-bold border border-[#dce9ff] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#006194]/20"
+                title="Mês Vigente do Dashboard"
+              >
+                {[
+                  'Janeiro 2026', 'Fevereiro 2026', 'Março 2026', 'Abril 2026',
+                  'Maio 2026', 'Junho 2026', 'Julho 2026', 'Agosto 2026',
+                  'Setembro 2026', 'Outubro 2026', 'Novembro 2026', 'Dezembro 2026'
+                ].map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="px-2.5 py-1 rounded-full bg-[#eff4ff] text-[#006194] text-[11px] font-bold border border-[#dce9ff]">
+                {selectedMonth}
+              </span>
+            )}
             <span className="text-[10px] text-[#006948] font-semibold mt-0.5 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#006948]" />
               Sincronizado
@@ -1302,7 +1321,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     const realHeight = Math.min(100, Math.round((item.real / monthlyEvolution.maxVal) * 100));
 
                     return (
-                      <div key={idx} className="flex flex-col items-center gap-1 z-10 flex-1 group">
+                      <div
+                        key={idx}
+                        onClick={() => onSelectMonth && onSelectMonth(item.nomeMes)}
+                        className={`flex flex-col items-center gap-1 z-10 flex-1 group ${onSelectMonth ? 'cursor-pointer' : ''}`}
+                      >
                         <div className="flex items-end gap-1.5 h-36">
                           {/* Planned Bar */}
                           <div
