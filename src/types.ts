@@ -126,6 +126,10 @@ export interface Transaction {
   comprovante_id?: string;
   itens?: PurchaseItem[];
   itensDetalhados?: PurchaseItem[];
+  kmAtual?: number;
+  litros?: number;
+  combustivel?: string;
+  fuelLogId?: string;
   created_at?: string;
 }
 
@@ -144,6 +148,11 @@ export interface Receipt {
   dadosBrutos?: string;
   formaPagamento?: string;
   pagoPor?: string;
+  litros?: number;
+  kmAtual?: number;
+  tipoCombustivel?: string;
+  precoLitro?: number;
+  fuelLogId?: string;
 }
 
 export interface ReceiptData {
@@ -271,6 +280,7 @@ export interface FuelLog {
   observacoes?: string;
   origem?: 'manual' | 'comprovante_ia';
   transacaoId?: string;
+  comprovanteId?: string;
   veiculoId?: string;
 }
 

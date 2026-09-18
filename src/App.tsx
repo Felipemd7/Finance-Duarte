@@ -276,6 +276,9 @@ export default function App() {
       pagoPor: receipt.pagoPor || 'Felipe Duarte',
       comprovanteId: receipt.id,
       itensDetalhados: receipt.itens,
+      kmAtual: receipt.kmAtual,
+      litros: receipt.litros,
+      combustivel: receipt.tipoCombustivel,
       observacoes: `Leitura automática ${receipt.numeroCupom || ''} • ${formaPgtoResolved}`,
     };
 
@@ -284,6 +287,53 @@ export default function App() {
       if (exists) return prev.map((t) => (t.id === txId ? newTx : t));
       return [newTx, ...prev];
     });
+
+    // Se for posto de combustível, gerar e vincular registro de telemetria veicular no Módulo de Metas
+    if (receipt.tipoEstabelecimento === 'Posto de combustível') {
+      const fuelId = receipt.fuelLogId || `fuel-${Date.now()}`;
+      const precoL = receipt.precoLitro || (receipt.litros && receipt.valorTotal ? Number((receipt.valorTotal / receipt.litros).toFixed(2)) : 5.85);
+      const lit = receipt.litros || Number((receipt.valorTotal / precoL).toFixed(2));
+      const km = receipt.kmAtual || 0;
+
+      const validFuel = fuelLogs.filter((f) => (f.kmAtual || 0) > 0).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+      const lastK = validFuel.length > 0 ? validFuel[validFuel.length - 1] : null;
+      const deltaKm = lastK && km > lastK.kmAtual ? km - lastK.kmAtual : 0;
+      const consumo = deltaKm > 0 && lit > 0 ? Number((deltaKm / lit).toFixed(2)) : 0;
+      const custoKm = deltaKm > 0 ? Number((receipt.valorTotal / deltaKm).toFixed(2)) : 0;
+
+      const newFuelLog: FuelLog = {
+        id: fuelId,
+        data: txDate,
+        posto: receipt.estabelecimento || 'Posto de Combustível',
+        combustivel: receipt.tipoCombustivel || 'Gasolina Comum',
+        valorTotal: receipt.valorTotal,
+        precoLitro: precoL,
+        litros: lit,
+        kmAtual: km,
+        kmRodados: deltaKm,
+        consumoKmPorLitro: consumo,
+        custoPorKm: custoKm,
+        pagoPor: (receipt.pagoPor?.toLowerCase().includes('genivânia') || receipt.pagoPor?.toLowerCase().includes('genivania')) ? 'Genivânia' : 'Felipe',
+        formaPagamento: formaPgtoResolved,
+        comprovanteUrl: receipt.imagemUrl,
+        comprovanteNome: receipt.numeroCupom,
+        transacaoId: newTx.id,
+        comprovanteId: receipt.id,
+        origem: 'comprovante_ia',
+        veiculoId: 'veh-compass',
+        observacoes: `Comprovante ${receipt.numeroCupom || receipt.id} sincronizado com telemetria do veículo`,
+      };
+
+      setFuelLogs((prev) => {
+        const exists = prev.some((f) => f.id === fuelId || f.transacaoId === newTx.id || f.comprovanteId === receipt.id);
+        if (exists) {
+          return prev.map((f) => (f.id === fuelId || f.transacaoId === newTx.id || f.comprovanteId === receipt.id) ? newFuelLog : f);
+        }
+        return [...prev, newFuelLog];
+      });
+
+      addFuelLogToCloud(newFuelLog);
+    }
 
     // Salvar na nuvem Supabase com await e retorno booleano
     const ok = await saveScannedReceiptToCloud(approvedReceiptObj, newTx);
@@ -318,10 +368,16 @@ export default function App() {
   const handleDeleteReceipt = async (receiptId: string) => {
     const recToDelete = receipts.find((r) => r.id === receiptId);
     setReceipts((prev) => prev.filter((r) => r.id !== receiptId));
-    if (recToDelete?.transacaoId) {
-      setTransactions((prev) => prev.filter((t) => t.id !== recToDelete.transacaoId));
+
+    if (recToDelete) {
+      setTransactions((prev) =>
+        prev.filter((t) => t.comprovanteId !== receiptId && t.id !== recToDelete.transacaoId)
+      );
+      setFuelLogs((prev) =>
+        prev.filter((f) => f.comprovanteId !== receiptId && f.transacaoId !== recToDelete.transacaoId)
+      );
+      await deleteReceiptFromCloud(receiptId, recToDelete.transacaoId);
     }
-    await deleteReceiptFromCloud(receiptId, recToDelete?.transacaoId);
   };
 
   const handleAddTransaction = (newTx: Transaction) => {
@@ -332,6 +388,23 @@ export default function App() {
     setTransactions((prev) =>
       prev.map((t) => (t.id === updatedTx.id ? updatedTx : t))
     );
+    if (updatedTx.subcategoria === 'Combustível') {
+      setFuelLogs((prev) =>
+        prev.map((f) =>
+          f.transacaoId === updatedTx.id || (updatedTx.comprovanteId && f.comprovanteId === updatedTx.comprovanteId)
+            ? {
+                ...f,
+                data: updatedTx.data,
+                posto: updatedTx.estabelecimento || f.posto,
+                valorTotal: updatedTx.valor,
+                kmAtual: updatedTx.kmAtual !== undefined ? updatedTx.kmAtual : f.kmAtual,
+                litros: updatedTx.litros !== undefined ? updatedTx.litros : f.litros,
+                combustivel: updatedTx.combustivel || f.combustivel,
+              }
+            : f
+        )
+      );
+    }
     await updateTransactionInCloud(updatedTx);
   };
 
@@ -401,6 +474,7 @@ export default function App() {
               setCurrentTab('extrato');
             }}
             selectedMonth={selectedMonth}
+            fuelLogs={fuelLogs}
           />
         )}
 

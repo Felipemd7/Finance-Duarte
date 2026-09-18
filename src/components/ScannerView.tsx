@@ -41,8 +41,9 @@ import {
   VideoOff,
   Car,
   Utensils,
+  Gauge,
 } from 'lucide-react';
-import { Receipt, PurchaseItem, EstablishmentType } from '../types';
+import { Receipt, PurchaseItem, EstablishmentType, FuelLog } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { analyzeReceiptDirect } from '../services/clientOcrService';
 import { compressImage } from '../utils/imageCompressor';
@@ -56,6 +57,7 @@ interface ScannerViewProps {
   onSaveReceiptDraft?: (receipt: Receipt) => Promise<boolean> | void;
   onNavigateToExtrato?: (mes?: string) => void;
   selectedMonth?: string;
+  fuelLogs?: FuelLog[];
 }
 
 const getMonthNameFromDate = (dateStr: string): string => {
@@ -160,6 +162,10 @@ const mapReceiptToViewModel = (r: any) => {
     tipoEstabelecimento: (r.tipoEstabelecimento as EstablishmentType) || 'Supermercado',
     meioPagamento: String(r.meioPagamento || r.formaPagamento || 'Cartão conjunto Inter'),
     comprador: String(r.comprador || r.pagoPor || 'Felipe Duarte & Genivânia Duarte'),
+    litros: r.litros !== undefined ? Number(r.litros) : undefined,
+    kmAtual: r.kmAtual !== undefined ? Number(r.kmAtual) : undefined,
+    tipoCombustivel: r.tipoCombustivel || undefined,
+    precoLitro: r.precoLitro !== undefined ? Number(r.precoLitro) : undefined,
     itens: items,
   };
 };
@@ -173,10 +179,18 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   onSaveReceiptDraft,
   onNavigateToExtrato,
   selectedMonth,
+  fuelLogs = [],
 }) => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const qrFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Odômetro mais recente do veículo para referência
+  const lastKnownKm = React.useMemo(() => {
+    if (!fuelLogs || fuelLogs.length === 0) return 45280;
+    const valid = fuelLogs.filter((f) => (f.kmAtual || 0) > 0).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+    return valid.length > 0 ? valid[valid.length - 1].kmAtual : 45280;
+  }, [fuelLogs]);
 
   // QR Code Scanner state
   const [showQrModal, setShowQrModal] = useState(false);
@@ -574,6 +588,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               ? d.comprador
               : 'Felipe Duarte & Genivânia Duarte',
           tipoEstabelecimento: (d.tipoEstabelecimento as EstablishmentType) || 'Supermercado',
+          litros: d.litros !== undefined ? Number(d.litros) : undefined,
+          kmAtual: d.kmAtual !== undefined ? Number(d.kmAtual) : undefined,
+          tipoCombustivel: d.tipoCombustivel || ((d.tipoEstabelecimento === 'Posto de combustível') ? 'Gasolina Comum' : undefined),
+          precoLitro: d.precoLitro !== undefined ? Number(d.precoLitro) : undefined,
           itens: mappedItems,
         };
 
@@ -592,6 +610,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             valorTotal: totalCalculated,
             status: 'Pendente',
             imagemUrl: base64,
+            litros: newReceiptModel.litros,
+            kmAtual: newReceiptModel.kmAtual,
+            tipoCombustivel: newReceiptModel.tipoCombustivel,
+            precoLitro: newReceiptModel.precoLitro,
             itens: mappedItems.map((it) => ({
               id: it.id,
               nome: it.nome,
@@ -677,6 +699,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       imagemUrl: uploadedImage || undefined,
       formaPagamento: extractedReceipt.meioPagamento,
       pagoPor: extractedReceipt.comprador,
+      litros: extractedReceipt.litros,
+      kmAtual: extractedReceipt.kmAtual,
+      tipoCombustivel: extractedReceipt.tipoCombustivel,
+      precoLitro: extractedReceipt.precoLitro,
       itens: extractedReceipt.itens.map((it, idx) => ({
         id: it.id || `pi-${idx}`,
         nome: it.nome,
@@ -902,6 +928,83 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                 <option value="Outros">📦 Outros</option>
               </select>
             </div>
+
+            {/* Bloco de Telemetria Veicular (Mobile) */}
+            {extractedReceipt.tipoEstabelecimento === 'Posto de combustível' && (
+              <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 space-y-2 mt-1 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-950">
+                    <Fuel className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Telemetria do Veículo (Jeep Compass)</span>
+                  </div>
+                  <span className="text-[9px] font-semibold text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded-md">
+                    Módulo de Metas
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-amber-900 block font-semibold">Odômetro Atual (KM):</span>
+                    <input
+                      type="number"
+                      placeholder={`ex: ${lastKnownKm + 450}`}
+                      value={extractedReceipt.kmAtual !== undefined ? extractedReceipt.kmAtual : ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                        setExtractedReceipt({ ...extractedReceipt, kmAtual: val });
+                      }}
+                      className="w-full mt-0.5 bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs font-bold text-[#0b1c30] focus:border-amber-600 focus:outline-none"
+                    />
+                    <span className="text-[9px] text-amber-700 block mt-0.5">
+                      Último: {lastKnownKm.toLocaleString('pt-BR')} km
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-amber-900 block font-semibold">Litros Abastecidos (L):</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="ex: 41.50"
+                      value={extractedReceipt.litros !== undefined ? extractedReceipt.litros : ''}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                        setExtractedReceipt({ ...extractedReceipt, litros: val });
+                      }}
+                      className="w-full mt-0.5 bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs font-bold text-[#0b1c30] focus:border-amber-600 focus:outline-none"
+                    />
+                    <span className="text-[9px] text-amber-700 block mt-0.5">
+                      {extractedReceipt.litros && extractedReceipt.totalLido
+                        ? `R$ ${(extractedReceipt.totalLido / extractedReceipt.litros).toFixed(2)}/L`
+                        : 'Preço/L estimado'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-amber-900 block font-semibold">Tipo de Combustível:</span>
+                  <select
+                    value={extractedReceipt.tipoCombustivel || 'Gasolina Comum'}
+                    onChange={(e) => setExtractedReceipt({ ...extractedReceipt, tipoCombustivel: e.target.value })}
+                    className="w-full mt-0.5 bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs font-semibold text-[#0b1c30] focus:border-amber-600 focus:outline-none"
+                  >
+                    <option value="Gasolina Comum">Gasolina Comum</option>
+                    <option value="Gasolina Aditivada">Gasolina Aditivada</option>
+                    <option value="Etanol">Etanol</option>
+                    <option value="Diesel">Diesel</option>
+                  </select>
+                </div>
+
+                {extractedReceipt.kmAtual && extractedReceipt.kmAtual > lastKnownKm && extractedReceipt.litros && (
+                  <div className="pt-1.5 border-t border-amber-200/80 flex items-center justify-between text-[10px] text-amber-950 font-bold">
+                    <span>+{extractedReceipt.kmAtual - lastKnownKm} km percorridos</span>
+                    <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md">
+                      ⚡ {((extractedReceipt.kmAtual - lastKnownKm) / extractedReceipt.litros).toFixed(1)} km/L
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Itens Extraídos */}
@@ -1416,6 +1519,105 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     </select>
                   </div>
                 </div>
+
+                {/* Bloco de Telemetria Veicular (Desktop) */}
+                {extractedReceipt.tipoEstabelecimento === 'Posto de combustível' && (
+                  <div className="mt-3 p-3 rounded-xl bg-amber-50/90 border border-amber-200 animate-in fade-in">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-amber-200/80">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                          <Fuel className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-amber-950">
+                            Telemetria do Veículo • Jeep Compass Longitude (DUA-2026)
+                          </h4>
+                          <p className="text-[10px] text-amber-800">
+                            Sincronização automática com o Módulo de Metas, Odômetro & Eficiência (km/L)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-amber-900 bg-amber-200/70 px-2 py-0.5 rounded-md">
+                          Último Odômetro: {lastKnownKm.toLocaleString('pt-BR')} km
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                      <div>
+                        <span className="text-[10px] text-amber-900 block font-semibold">Odômetro Atual (KM):</span>
+                        <input
+                          type="number"
+                          placeholder={`ex: ${lastKnownKm + 450}`}
+                          value={extractedReceipt.kmAtual !== undefined ? extractedReceipt.kmAtual : ''}
+                          onChange={(e) => {
+                            const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                            setExtractedReceipt({ ...extractedReceipt, kmAtual: val });
+                          }}
+                          className="w-full mt-0.5 bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#0b1c30] focus:border-amber-600 focus:outline-none"
+                        />
+                        {extractedReceipt.kmAtual && extractedReceipt.kmAtual > lastKnownKm ? (
+                          <span className="text-[10px] font-bold text-emerald-700 block mt-0.5">
+                            +{extractedReceipt.kmAtual - lastKnownKm} km percorridos
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-amber-700 block mt-0.5">Informe o odômetro do painel</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-amber-900 block font-semibold">Litros Abastecidos (L):</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="ex: 41.50"
+                          value={extractedReceipt.litros !== undefined ? extractedReceipt.litros : ''}
+                          onChange={(e) => {
+                            const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                            setExtractedReceipt({ ...extractedReceipt, litros: val });
+                          }}
+                          className="w-full mt-0.5 bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#0b1c30] focus:border-amber-600 focus:outline-none"
+                        />
+                        <span className="text-[9px] text-amber-700 block mt-0.5">
+                          {extractedReceipt.litros && extractedReceipt.totalLido
+                            ? `Preço: R$ ${(extractedReceipt.totalLido / extractedReceipt.litros).toFixed(2)}/L`
+                            : 'Volume em litros'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-amber-900 block font-semibold">Combustível:</span>
+                        <select
+                          value={extractedReceipt.tipoCombustivel || 'Gasolina Comum'}
+                          onChange={(e) => setExtractedReceipt({ ...extractedReceipt, tipoCombustivel: e.target.value })}
+                          className="w-full mt-0.5 bg-white border border-amber-300 rounded-lg px-2 py-1.5 text-xs font-semibold text-[#0b1c30] focus:border-amber-600 focus:outline-none cursor-pointer"
+                        >
+                          <option value="Gasolina Comum">Gasolina Comum</option>
+                          <option value="Gasolina Aditivada">Gasolina Aditivada</option>
+                          <option value="Etanol">Etanol</option>
+                          <option value="Diesel">Diesel</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-amber-900 block font-semibold">Eficiência Estimada:</span>
+                        <div className="mt-0.5 p-1.5 bg-amber-100/70 border border-amber-300/80 rounded-lg text-xs font-bold text-amber-950 flex items-center justify-between">
+                          <span>
+                            {extractedReceipt.kmAtual && extractedReceipt.kmAtual > lastKnownKm && extractedReceipt.litros
+                              ? `${((extractedReceipt.kmAtual - lastKnownKm) / extractedReceipt.litros).toFixed(1)} km/L`
+                              : '-- km/L'}
+                          </span>
+                          <span className="text-[10px] font-semibold text-amber-800">
+                            {extractedReceipt.kmAtual && extractedReceipt.kmAtual > lastKnownKm && extractedReceipt.totalLido
+                              ? `R$ ${(extractedReceipt.totalLido / (extractedReceipt.kmAtual - lastKnownKm)).toFixed(2)}/km`
+                              : '-- /km'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Banner Contextual da Forma de Pagamento para o Rateio 50/50 */}
                 <div className="mt-3">

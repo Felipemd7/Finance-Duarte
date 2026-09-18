@@ -58,6 +58,10 @@ export interface NormalizedReceiptOutput {
   subcategoriaSugerida: string;
   cnpj?: string;
   cidade?: string;
+  litros?: number;
+  kmAtual?: number;
+  tipoCombustivel?: string;
+  precoLitro?: number;
   itens: Array<{
     nome: string;
     categoriaItem?: string;
@@ -281,6 +285,42 @@ export function normalizeReceiptData(data: any): NormalizedReceiptOutput {
     };
   });
 
+  // Extrair telemetria veicular se for posto de combustível
+  let litros: number | undefined = data.litros ? Number(data.litros) : undefined;
+  let kmAtual: number | undefined = data.km || data.kmAtual ? Number(data.km || data.kmAtual) : undefined;
+  let tipoCombustivel: string | undefined = data.tipoCombustivel || data.combustivel;
+  let precoLitro: number | undefined = data.precoPorLitro || data.precoLitro ? Number(data.precoPorLitro || data.precoLitro) : undefined;
+
+  if (tipoEstabelecimento === 'Posto de combustível') {
+    const fuelItem = normalizedItems.find((it) => {
+      const lower = it.nome.toLowerCase();
+      return lower.includes('gasolina') || lower.includes('etanol') || lower.includes('diesel') || lower.includes('combustivel') || lower.includes('abastecimento');
+    });
+
+    if (fuelItem) {
+      if (!litros && fuelItem.quantidade > 0 && fuelItem.quantidade !== 1) {
+        litros = Number(fuelItem.quantidade.toFixed(2));
+      }
+      if (!precoLitro && fuelItem.precoUnitario > 0) {
+        precoLitro = Number(fuelItem.precoUnitario.toFixed(2));
+      }
+      if (!tipoCombustivel) {
+        const itemLower = fuelItem.nome.toLowerCase();
+        if (itemLower.includes('aditivada')) tipoCombustivel = 'Gasolina Aditivada';
+        else if (itemLower.includes('etanol')) tipoCombustivel = 'Etanol';
+        else if (itemLower.includes('diesel')) tipoCombustivel = 'Diesel';
+        else tipoCombustivel = 'Gasolina Comum';
+      }
+    }
+
+    const valorTotal = Number(data.valorTotal) || 0;
+    if (!precoLitro) precoLitro = 5.85;
+    if (!litros && valorTotal > 0 && precoLitro > 0) {
+      litros = Number((valorTotal / precoLitro).toFixed(2));
+    }
+    if (!tipoCombustivel) tipoCombustivel = 'Gasolina Comum';
+  }
+
   return {
     estabelecimento: estabelecimento || 'Estabelecimento Identificado',
     razaoSocial: razaoSocial || undefined,
@@ -289,6 +329,10 @@ export function normalizeReceiptData(data: any): NormalizedReceiptOutput {
     subcategoriaSugerida,
     cnpj: rawCnpj || undefined,
     cidade: cidade || undefined,
+    litros,
+    kmAtual,
+    tipoCombustivel,
+    precoLitro,
     itens: normalizedItems,
   };
 }

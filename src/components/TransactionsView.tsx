@@ -726,6 +726,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                                 Cupom IA
                               </span>
                             )}
+                            {(tx.kmAtual || tx.litros) && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-900 text-[9px] font-bold border border-amber-200">
+                                ⛽ {tx.litros ? `${tx.litros}L` : ''} {tx.kmAtual ? `• ${tx.kmAtual.toLocaleString('pt-BR')} km` : ''}
+                              </span>
+                            )}
                             <span className="px-1.5 py-0.2 rounded bg-[#f1f5f9] text-[#565e74] text-[9px] font-medium">
                               {tx.subcategoria || tx.categoria}
                             </span>
@@ -1224,9 +1229,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         <span className="font-semibold text-[#0b1c30] block capitalize">
                           {tx.subcategoria || 'Geral'}
                         </span>
-                        <span className="text-[10px] text-[#565e74]">
+                        <span className="text-[10px] text-[#565e74] block">
                           {tx.categoria || 'Variável'}
                         </span>
+                        {(tx.kmAtual || tx.litros) && (
+                          <span className="inline-flex items-center gap-1 mt-0.5 text-[9px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-md">
+                            ⛽ {tx.litros ? `${tx.litros}L` : ''} {tx.kmAtual ? `• ${tx.kmAtual.toLocaleString('pt-BR')} km` : ''}
+                          </span>
+                        )}
                       </td>
 
                       {/* Person / Member */}

@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Loader2,
   Clock,
+  Fuel,
 } from 'lucide-react';
 import { Transaction, CategoryType } from '../types';
 import {
@@ -46,6 +47,11 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   const [observacoes, setObservacoes] = useState('');
   const [status, setStatus] = useState<'pago' | 'pendente'>('pago');
 
+  // Fuel Telemetry states
+  const [kmAtual, setKmAtual] = useState('');
+  const [litros, setLitros] = useState('');
+  const [combustivel, setCombustivel] = useState('Gasolina Comum');
+
   // Feedback states
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -71,6 +77,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
           ? 'pendente'
           : 'pago'
       );
+      setKmAtual(transactionToEdit.kmAtual ? String(transactionToEdit.kmAtual) : '');
+      setLitros(transactionToEdit.litros ? String(transactionToEdit.litros) : '');
+      setCombustivel(transactionToEdit.combustivel || 'Gasolina Comum');
       setSaveError(null);
       setSaveSuccess(null);
     } else {
@@ -83,6 +92,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       setResponsavel('Felipe');
       setObservacoes('');
       setStatus('pago');
+      setKmAtual('');
+      setLitros('');
+      setCombustivel('Gasolina Comum');
       setSaveError(null);
       setSaveSuccess(null);
     }
@@ -116,6 +128,8 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
 
     const catId = mapCategoryToId(categoria);
     const subcatId = mapSubcategoryToId(subcategoria, categoria);
+    const parsedKm = kmAtual ? parseInt(kmAtual.replace(/\D/g, ''), 10) : undefined;
+    const parsedLitros = litros ? parseFloat(litros.replace(',', '.')) : undefined;
 
     if (transactionToEdit) {
       const updatedTx: Transaction = {
@@ -133,6 +147,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
         status: isCredit ? 'pendente' : status,
         pagoPor: responsavel,
         observacoes: observacoes.trim() || undefined,
+        kmAtual: parsedKm,
+        litros: parsedLitros,
+        combustivel: subcategoria === 'Combustível' ? combustivel : undefined,
       };
 
       try {
@@ -170,6 +187,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
         status: isCredit ? 'pendente' : status,
         pagoPor: responsavel,
         observacoes: observacoes.trim() || undefined,
+        kmAtual: parsedKm,
+        litros: parsedLitros,
+        combustivel: subcategoria === 'Combustível' ? combustivel : undefined,
       };
 
       try {
@@ -351,6 +371,55 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               </select>
             </div>
           </div>
+
+          {/* Telemetria de Combustível (Módulo de Metas & Veículo) */}
+          {subcategoria === 'Combustível' && (
+            <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2 animate-in fade-in">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                <Fuel className="w-3.5 h-3.5 text-amber-700" />
+                <span>Telemetria do Veículo (Jeep Compass • Módulo de Metas)</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div>
+                  <label className="text-[10px] font-semibold text-amber-900 block">Odômetro Atual (KM)</label>
+                  <input
+                    type="number"
+                    placeholder="ex: 45420"
+                    value={kmAtual}
+                    onChange={(e) => setKmAtual(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full mt-0.5 px-2.5 py-1.5 text-xs font-bold bg-white border border-amber-300 rounded-lg focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-amber-900 block">Litros (L)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="ex: 42.5"
+                    value={litros}
+                    onChange={(e) => setLitros(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full mt-0.5 px-2.5 py-1.5 text-xs font-bold bg-white border border-amber-300 rounded-lg focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-semibold text-amber-900 block">Combustível</label>
+                  <select
+                    value={combustivel}
+                    onChange={(e) => setCombustivel(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full mt-0.5 px-2 py-1.5 text-xs font-semibold bg-white border border-amber-300 rounded-lg focus:outline-none"
+                  >
+                    <option value="Gasolina Comum">Gasolina Comum</option>
+                    <option value="Gasolina Aditivada">Gasolina Aditivada</option>
+                    <option value="Etanol">Etanol</option>
+                    <option value="Diesel">Diesel</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Forma de Pagamento */}
           <div>
