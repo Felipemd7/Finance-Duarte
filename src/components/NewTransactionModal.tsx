@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Plus,
+  Edit3,
   Users,
   CreditCard,
   Building2,
@@ -10,15 +11,22 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import { Transaction, CategoryType } from '../types';
-import { addTransactionToCloud, mapCategoryToId, mapSubcategoryToId } from '../services/supabaseService';
+import {
+  addTransactionToCloud,
+  updateTransactionInCloud,
+  mapCategoryToId,
+  mapSubcategoryToId,
+} from '../services/supabaseService';
 
 interface NewTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (tx: Transaction) => void;
   defaultMonth?: string;
+  transactionToEdit?: Transaction | null;
 }
 
 export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
@@ -26,6 +34,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   onClose,
   onSave,
   defaultMonth,
+  transactionToEdit,
 }) => {
   const [estabelecimento, setEstabelecimento] = useState('');
   const [valor, setValor] = useState('');
@@ -35,11 +44,49 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   const [formaPagamento, setFormaPagamento] = useState('Cartão conjunto Inter');
   const [responsavel, setResponsavel] = useState<'Felipe' | 'Genivânia'>('Felipe');
   const [observacoes, setObservacoes] = useState('');
+  const [status, setStatus] = useState<'pago' | 'pendente'>('pago');
 
   // Feedback states
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Sync state when opening or when transactionToEdit changes
+  useEffect(() => {
+    if (transactionToEdit) {
+      setEstabelecimento(transactionToEdit.estabelecimento || '');
+      setValor(transactionToEdit.valor !== undefined ? String(transactionToEdit.valor) : '');
+      setData(transactionToEdit.data ? transactionToEdit.data.slice(0, 10) : new Date().toISOString().split('T')[0]);
+      setCategoria((transactionToEdit.categoria as CategoryType) || 'Variável');
+      setSubcategoria(transactionToEdit.subcategoria || 'Supermercado');
+      setFormaPagamento(transactionToEdit.formaPagamento || 'Cartão conjunto Inter');
+      setResponsavel(
+        transactionToEdit.pagoPor === 'Genivânia' || transactionToEdit.usuario_id === 'usr-genivania'
+          ? 'Genivânia'
+          : 'Felipe'
+      );
+      setObservacoes(transactionToEdit.observacoes || '');
+      setStatus(
+        transactionToEdit.status === 'pendente' || transactionToEdit.status === 'previsto'
+          ? 'pendente'
+          : 'pago'
+      );
+      setSaveError(null);
+      setSaveSuccess(null);
+    } else {
+      setEstabelecimento('');
+      setValor('');
+      setData(new Date().toISOString().split('T')[0]);
+      setCategoria('Variável');
+      setSubcategoria('Supermercado');
+      setFormaPagamento('Cartão conjunto Inter');
+      setResponsavel('Felipe');
+      setObservacoes('');
+      setStatus('pago');
+      setSaveError(null);
+      setSaveSuccess(null);
+    }
+  }, [transactionToEdit, isOpen]);
 
   if (!isOpen) return null;
 
@@ -70,52 +117,88 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
     const catId = mapCategoryToId(categoria);
     const subcatId = mapSubcategoryToId(subcategoria, categoria);
 
-    const newTx: Transaction = {
-      id: 'tx-' + Date.now(),
-      usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
-      data,
-      mesReferencia: data.substring(0, 7),
-      tipo: 'despesa',
-      categoria,
-      categoria_id: catId,
-      subcategoria,
-      subcategoria_id: subcatId,
-      estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
-      valor: numVal,
-      formaPagamento,
-      status: isCredit ? 'pendente' : 'pago',
-      pagoPor: responsavel,
-      observacoes: observacoes.trim() || undefined,
-    };
+    if (transactionToEdit) {
+      const updatedTx: Transaction = {
+        ...transactionToEdit,
+        usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+        data,
+        mesReferencia: data.substring(0, 7),
+        categoria,
+        categoria_id: catId,
+        subcategoria,
+        subcategoria_id: subcatId,
+        estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
+        valor: numVal,
+        formaPagamento,
+        status: isCredit ? 'pendente' : status,
+        pagoPor: responsavel,
+        observacoes: observacoes.trim() || undefined,
+      };
 
-    try {
-      // Salvar na nuvem Supabase com await
-      const res = await addTransactionToCloud(newTx);
-      if (res.success) {
-        setSaveSuccess('Lançamento salvo com sucesso no banco!');
-        onSave(newTx);
-        setTimeout(() => {
+      try {
+        const res = await updateTransactionInCloud(updatedTx);
+        if (res.success) {
+          setSaveSuccess('Lançamento atualizado com sucesso no banco!');
+          onSave(updatedTx);
+          setTimeout(() => {
+            setIsSaving(false);
+            setSaveSuccess(null);
+            onClose();
+          }, 800);
+        } else {
           setIsSaving(false);
-          setSaveSuccess(null);
-          onClose();
-          // Limpar formulário
-          setValor('');
-          setEstabelecimento('');
-          setObservacoes('');
-        }, 900);
-      } else {
+          setSaveError(res.error || 'Erro ao atualizar lançamento no banco de dados.');
+        }
+      } catch (err: any) {
         setIsSaving(false);
-        setSaveError(res.error || 'Erro ao salvar lançamento no banco de dados.');
+        setSaveError(err?.message || 'Falha de comunicação ao atualizar.');
       }
-    } catch (err: any) {
-      setIsSaving(false);
-      setSaveError(err?.message || 'Falha de comunicação ao salvar.');
+    } else {
+      const newTx: Transaction = {
+        id: 'tx-' + Date.now(),
+        usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+        data,
+        mesReferencia: data.substring(0, 7),
+        tipo: 'despesa',
+        categoria,
+        categoria_id: catId,
+        subcategoria,
+        subcategoria_id: subcatId,
+        estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
+        valor: numVal,
+        formaPagamento,
+        status: isCredit ? 'pendente' : status,
+        pagoPor: responsavel,
+        observacoes: observacoes.trim() || undefined,
+      };
+
+      try {
+        const res = await addTransactionToCloud(newTx);
+        if (res.success) {
+          setSaveSuccess('Lançamento salvo com sucesso no banco!');
+          onSave(newTx);
+          setTimeout(() => {
+            setIsSaving(false);
+            setSaveSuccess(null);
+            onClose();
+            setValor('');
+            setEstabelecimento('');
+            setObservacoes('');
+          }, 800);
+        } else {
+          setIsSaving(false);
+          setSaveError(res.error || 'Erro ao salvar lançamento no banco de dados.');
+        }
+      } catch (err: any) {
+        setIsSaving(false);
+        setSaveError(err?.message || 'Falha de comunicação ao salvar.');
+      }
     }
   };
 
   const subcategoryOptions: Record<CategoryType, string[]> = {
     Invariável: ['Aluguel', 'Condomínio', 'Seguro (Carro)', 'Rastreador', 'Internet / TV', 'Assinaturas Extras'],
-    Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Lazer', 'Manutenção de carro', 'Energia Elétrica / Luz', 'Água', 'Gás', 'Uber / Transporte'],
+    Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Estacionamento', 'Lazer', 'Manutenção de carro', 'Energia Elétrica / Luz', 'Água', 'Gás', 'Pedágio', 'Uber / Transporte'],
     'Extra/Eventualidades': ['IPVA', 'Presentes & Comemorações', 'Médico / Exames', 'Viagem', 'Manutenção Casa', 'Eventualidades'],
   };
 
@@ -124,12 +207,12 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       <div className="w-full max-w-lg bg-white rounded-2xl p-5 shadow-2xl border border-[#e5eeff] flex flex-col max-h-[92vh]">
         <div className="flex items-center justify-between pb-3 border-b border-[#e5eeff]">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#006948] text-white flex items-center justify-center">
-              <Plus className="w-4 h-4" />
+            <div className={`w-8 h-8 rounded-xl ${transactionToEdit ? 'bg-[#006194]' : 'bg-[#006948]'} text-white flex items-center justify-center`}>
+              {transactionToEdit ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             </div>
             <div>
               <h3 className="font-display font-bold text-base text-[#0b1c30]">
-                Novo Lançamento de Despesa
+                {transactionToEdit ? 'Editar Lançamento' : 'Novo Lançamento de Despesa'}
               </h3>
               <p className="text-xs text-[#565e74]">Casal Duarte • {defaultMonth || '2026'}</p>
             </div>
@@ -301,6 +384,44 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Situação / Status */}
+          <div>
+            <label className="text-xs font-semibold text-[#0b1c30] flex items-center justify-between">
+              <span>Situação do Lançamento</span>
+              <span className="text-[10px] text-[#565e74]">
+                {status === 'pendente' ? 'Pendente de quitação' : 'Desembolso já quitado'}
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setStatus('pago')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  status === 'pago'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-[#f8f9ff] text-[#0b1c30] border border-[#cbd5e1] hover:bg-[#eff4ff]'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Pago</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => setStatus('pendente')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  status === 'pendente'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-[#f8f9ff] text-[#0b1c30] border border-[#cbd5e1] hover:bg-[#eff4ff]'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Pendente</span>
+              </button>
+            </div>
+          </div>
+
           {/* Quem pagou */}
           <div>
             <label className="text-xs font-bold text-[#0b1c30] flex items-center gap-1.5 mb-1.5">
@@ -377,7 +498,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                   <span>Salvando no banco...</span>
                 </>
               ) : (
-                <span>Salvar Lançamento</span>
+                <span>{transactionToEdit ? 'Salvar Alterações' : 'Salvar Lançamento'}</span>
               )}
             </button>
           </div>

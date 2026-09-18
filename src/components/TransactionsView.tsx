@@ -33,11 +33,13 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowUp,
+  Edit3,
 } from 'lucide-react';
 import { Transaction, Receipt, SpreadsheetRow } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { deleteTransactionFromCloud } from '../services/supabaseService';
 import { MonthlyBudgetSpreadsheetPanel } from './MonthlyBudgetSpreadsheetPanel';
+import { NewTransactionModal } from './NewTransactionModal';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
@@ -75,6 +77,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   // Modals & Feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectedTransactionDetail, setSelectedTransactionDetail] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const showToast = (msg: string) => {
@@ -112,6 +115,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     }
     if (s.includes('combustivel') || s.includes('combustível') || s.includes('gasolina') || s.includes('posto')) {
       return { icon: Fuel, bg: 'bg-[#eff4ff] text-[#006194] border-[#dce9ff]', label: 'Combustível' };
+    }
+    if (s.includes('estacionamento') || s.includes('estac') || s.includes('pedagio') || s.includes('pedágio')) {
+      return { icon: Car, bg: 'bg-[#fef3c7] text-[#d97706] border-[#fde68a]', label: 'Estacionamento & Transporte' };
     }
     if (s.includes('aluguel') || s.includes('condominio') || s.includes('condomínio') || s.includes('moradia')) {
       return { icon: Building2, bg: 'bg-[#eff4ff] text-[#006194] border-[#dce9ff]', label: 'Moradia' };
@@ -727,13 +733,26 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0">
+                      <div className="text-right shrink-0 flex flex-col items-end justify-center">
                         <span className="font-mono font-bold text-xs text-[#0b1c30] block">
                           - {formatBRL(tx.valor)}
                         </span>
-                        <span className="text-[10px] text-[#565e74] block mt-0.5">
-                          {tx.formaPagamento || 'Cartão'}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-[#565e74]">
+                            {tx.formaPagamento || 'Cartão'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTransaction(tx);
+                            }}
+                            className="p-1 rounded-md text-[#006194] hover:bg-[#eff4ff] active:scale-95 transition-transform"
+                            title="Editar lançamento"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1261,16 +1280,30 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
                       {/* Action */}
                       <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTransactionDetail(tx);
-                          }}
-                          className="p-1.5 rounded-lg text-[#565e74] hover:text-[#0b1c30] hover:bg-[#eff4ff] transition-colors"
-                          title="Ver detalhes"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTransaction(tx);
+                            }}
+                            className="p-1.5 rounded-lg text-[#006194] hover:text-[#004770] hover:bg-[#eff4ff] transition-colors cursor-pointer"
+                            title="Editar lançamento"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTransactionDetail(tx);
+                            }}
+                            className="p-1.5 rounded-lg text-[#565e74] hover:text-[#0b1c30] hover:bg-[#eff4ff] transition-colors cursor-pointer"
+                            title="Ver detalhes"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1423,6 +1456,19 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
             <div className="mt-4 pt-3 border-t border-[#f1f5f9] flex gap-2">
               <button
+                type="button"
+                onClick={() => {
+                  const toEdit = selectedTransactionDetail;
+                  setSelectedTransactionDetail(null);
+                  setEditingTransaction(toEdit);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#006948] hover:bg-[#00563b] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Editar Lançamento</span>
+              </button>
+
+              <button
                 onClick={() => handleDelete(selectedTransactionDetail)}
                 disabled={isDeleting}
                 className="py-2.5 px-3 rounded-xl bg-[#fee2e2] text-[#dc2626] hover:bg-[#fecdd3] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
@@ -1434,13 +1480,28 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
               <button
                 onClick={() => setSelectedTransactionDetail(null)}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0b1c30] text-xs font-semibold transition-colors cursor-pointer text-center"
+                className="py-2.5 px-4 rounded-xl bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#0b1c30] text-xs font-semibold transition-colors cursor-pointer text-center"
               >
                 Fechar
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Edição de Lançamento */}
+      {editingTransaction && (
+        <NewTransactionModal
+          isOpen={!!editingTransaction}
+          transactionToEdit={editingTransaction}
+          onClose={() => setEditingTransaction(null)}
+          onSave={(updatedTx) => {
+            onUpdateTransaction(updatedTx);
+            setEditingTransaction(null);
+            showToast(`✅ Lançamento "${updatedTx.estabelecimento}" atualizado com sucesso!`);
+          }}
+          defaultMonth={selectedMonth}
+        />
       )}
     </div>
   );
