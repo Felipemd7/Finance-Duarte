@@ -30,6 +30,7 @@ import {
   saveGoalToCloud,
   updateGoalInCloud,
   deleteGoalFromCloud,
+  updateTransactionInCloud,
 } from './services/supabaseService';
 
 export default function App() {
@@ -321,10 +322,11 @@ export default function App() {
     setTransactions((prev) => [newTx, ...prev]);
   };
 
-  const handleUpdateTransaction = (updatedTx: Transaction) => {
+  const handleUpdateTransaction = async (updatedTx: Transaction) => {
     setTransactions((prev) =>
       prev.map((t) => (t.id === updatedTx.id ? updatedTx : t))
     );
+    await updateTransactionInCloud(updatedTx);
   };
 
   const handleDeleteTransaction = (id: string) => {

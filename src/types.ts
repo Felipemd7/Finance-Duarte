@@ -6,11 +6,13 @@
 export type CategoryType = 'Invariável' | 'Variável' | 'Extra/Eventualidades';
 
 export type PaymentMethod =
+  | 'Cartão conjunto Inter'
   | 'Cartão de Crédito'
   | 'Cartão de Crédito NuBank'
   | 'Débito'
   | 'Débito em Conta'
   | 'PIX'
+  | 'PIX Inter'
   | 'PIX NuBank'
   | 'Dinheiro'
   | 'Boleto'

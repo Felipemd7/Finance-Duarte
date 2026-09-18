@@ -368,7 +368,7 @@ export const isCreditCardPayment = (forma?: string, obs?: string): boolean => {
   const str = `${forma || ''} ${obs || ''}`.toLowerCase();
   if (str.includes('credito') || str.includes('crédito')) return true;
   if (str.includes('cartao') && !str.includes('debito') && !str.includes('débito')) return true;
-  if (str.includes('fatura') || str.includes('nubank')) return true;
+  if (str.includes('fatura') || str.includes('nubank') || str.includes('inter')) return true;
   return false;
 };
 

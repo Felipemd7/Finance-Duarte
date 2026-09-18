@@ -705,7 +705,16 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                             <span className={`w-1.5 h-1.5 rounded-full ${isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`} />
                             {isFelipe ? 'Felipe' : 'Genivânia'} • {tx.data}
                           </span>
-                          <div className="flex items-center gap-1 mt-1">
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {tx.status === 'pendente' || tx.status === 'previsto' ? (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 text-[9px] font-bold border border-amber-200">
+                                Pendente
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 text-[9px] font-semibold border border-emerald-200">
+                                Pago
+                              </span>
+                            )}
                             {tx.itens && tx.itens.length > 0 && (
                               <span className="px-1.5 py-0.2 rounded bg-[#ecfdf5] text-[#006948] text-[9px] font-bold border border-[#bbf7d0]">
                                 Cupom IA
@@ -1217,11 +1226,22 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
                       {/* Payment Method & Items Tag */}
                       <td className="py-3.5 px-4">
-                        <span className="text-[#0b1c30] font-medium block">
-                          {tx.formaPagamento || 'PIX'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[#0b1c30] font-medium block">
+                            {tx.formaPagamento || 'PIX'}
+                          </span>
+                          {tx.status === 'pendente' || tx.status === 'previsto' ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              Pendente
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              Pago
+                            </span>
+                          )}
+                        </div>
                         {tx.itens && tx.itens.length > 0 && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#ecfdf5] text-[#006948] border border-[#bbf7d0]">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#ecfdf5] text-[#006948] border border-[#bbf7d0] mt-1">
                             <Sparkles className="w-2.5 h-2.5" />
                             <span>{tx.itens.length} produtos</span>
                           </span>
@@ -1338,6 +1358,21 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 <span className="text-[#565e74]">Forma de Pagamento:</span>
                 <span className="font-medium text-[#0b1c30]">
                   {selectedTransactionDetail.formaPagamento || 'PIX / Débito'}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1 border-b border-[#f8f9ff]">
+                <span className="text-[#565e74]">Status:</span>
+                <span>
+                  {selectedTransactionDetail.status === 'pendente' || selectedTransactionDetail.status === 'previsto' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      Pendente (Cartão de Crédito)
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      Pago
+                    </span>
+                  )}
                 </span>
               </div>
 

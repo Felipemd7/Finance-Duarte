@@ -7,9 +7,12 @@ import {
   Building2,
   Calendar,
   Tag,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { Transaction, CategoryType } from '../types';
-import { addTransactionToCloud } from '../services/supabaseService';
+import { addTransactionToCloud, mapCategoryToId, mapSubcategoryToId } from '../services/supabaseService';
 
 interface NewTransactionModalProps {
   isOpen: boolean;
@@ -29,28 +32,54 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   const [data, setData] = useState(new Date().toISOString().split('T')[0]);
   const [categoria, setCategoria] = useState<CategoryType>('Variável');
   const [subcategoria, setSubcategoria] = useState('Supermercado');
-  const [formaPagamento, setFormaPagamento] = useState('Cartão de Crédito NuBank');
+  const [formaPagamento, setFormaPagamento] = useState('Cartão conjunto Inter');
   const [responsavel, setResponsavel] = useState<'Felipe' | 'Genivânia'>('Felipe');
   const [observacoes, setObservacoes] = useState('');
 
+  // Feedback states
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const numVal = parseFloat(valor.replace(',', '.'));
-    if (isNaN(numVal) || numVal <= 0) return;
+    if (isNaN(numVal) || numVal <= 0) {
+      setSaveError('Por favor, informe um valor válido maior que zero.');
+      return;
+    }
 
-    const isCredit = formaPagamento.toLowerCase().includes('credito') ||
-                     formaPagamento.toLowerCase().includes('crédito') ||
-                     (formaPagamento.toLowerCase().includes('cartao') && !formaPagamento.toLowerCase().includes('debito'));
+    if (!estabelecimento.trim()) {
+      setSaveError('Por favor, informe o estabelecimento ou local.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+
+    const formaLower = formaPagamento.toLowerCase();
+    const isCredit =
+      formaLower.includes('inter') ||
+      formaLower.includes('credito') ||
+      formaLower.includes('crédito') ||
+      (formaLower.includes('cartao') && !formaLower.includes('debito'));
+
+    const catId = mapCategoryToId(categoria);
+    const subcatId = mapSubcategoryToId(subcategoria, categoria);
 
     const newTx: Transaction = {
       id: 'tx-' + Date.now(),
       usuario_id: responsavel === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
       data,
+      mesReferencia: data.substring(0, 7),
       tipo: 'despesa',
       categoria,
+      categoria_id: catId,
       subcategoria,
+      subcategoria_id: subcatId,
       estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
       valor: numVal,
       formaPagamento,
@@ -59,17 +88,35 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       observacoes: observacoes.trim() || undefined,
     };
 
-    // Save to Supabase in background
-    addTransactionToCloud(newTx).catch((err) => console.warn('Falha ao salvar no Supabase:', err));
-
-    onSave(newTx);
-    onClose();
+    try {
+      // Salvar na nuvem Supabase com await
+      const res = await addTransactionToCloud(newTx);
+      if (res.success) {
+        setSaveSuccess('Lançamento salvo com sucesso no banco!');
+        onSave(newTx);
+        setTimeout(() => {
+          setIsSaving(false);
+          setSaveSuccess(null);
+          onClose();
+          // Limpar formulário
+          setValor('');
+          setEstabelecimento('');
+          setObservacoes('');
+        }, 900);
+      } else {
+        setIsSaving(false);
+        setSaveError(res.error || 'Erro ao salvar lançamento no banco de dados.');
+      }
+    } catch (err: any) {
+      setIsSaving(false);
+      setSaveError(err?.message || 'Falha de comunicação ao salvar.');
+    }
   };
 
   const subcategoryOptions: Record<CategoryType, string[]> = {
-    Invariável: ['Aluguel', 'Condomínio', 'Seguro (Carro)', 'Rastreador', 'Plano de Saúde', 'Internet / TV'],
-    Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Lazer', 'Manutenção de carro', 'Energia Elétrica', 'Gás'],
-    'Extra/Eventualidades': ['IPVA', 'Presentes & Comemorações', 'Médico / Exames', 'Viagem', 'Manutenção Casa'],
+    Invariável: ['Aluguel', 'Condomínio', 'Seguro (Carro)', 'Rastreador', 'Internet / TV', 'Assinaturas Extras'],
+    Variável: ['Supermercado', 'Combustível', 'Farmácia', 'Lazer', 'Manutenção de carro', 'Energia Elétrica / Luz', 'Água', 'Gás', 'Uber / Transporte'],
+    'Extra/Eventualidades': ['IPVA', 'Presentes & Comemorações', 'Médico / Exames', 'Viagem', 'Manutenção Casa', 'Eventualidades'],
   };
 
   return (
@@ -84,16 +131,32 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               <h3 className="font-display font-bold text-base text-[#0b1c30]">
                 Novo Lançamento de Despesa
               </h3>
-              <p className="text-xs text-[#565e74]">Casal Duarte • {defaultMonth}</p>
+              <p className="text-xs text-[#565e74]">Casal Duarte • {defaultMonth || '2026'}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-[#eff4ff] text-[#565e74]"
+            disabled={isSaving}
+            className="p-1.5 rounded-lg hover:bg-[#eff4ff] text-[#565e74] disabled:opacity-50"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Feedback banners */}
+        {saveSuccess && (
+          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2 font-semibold animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{saveSuccess}</span>
+          </div>
+        )}
+
+        {saveError && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center gap-2 font-semibold animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="flex-1">{saveError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-3 flex flex-col gap-3">
           {/* Valor */}
@@ -108,6 +171,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 placeholder="0,00"
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
+                disabled={isSaving}
                 className="w-full pl-10 pr-3 py-2 text-base font-bold text-[#0b1c30] bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl focus:outline-hidden focus:border-[#006948]"
               />
             </div>
@@ -125,9 +189,10 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 placeholder="Ex: Atacadão, Shell, Droga Raia..."
                 value={estabelecimento}
                 onChange={(e) => setEstabelecimento(e.target.value)}
+                disabled={isSaving}
                 className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl focus:outline-hidden focus:border-[#006948]"
               />
-              {/* Quick suggestion pills matching mobile mockup */}
+              {/* Quick suggestion pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pt-1.5 scrollbar-none">
                 {[
                   { name: 'Atacadão', full: 'Atacadão S/A', cat: 'Variável', sub: 'Supermercado' },
@@ -140,12 +205,13 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                   <button
                     key={sug.name}
                     type="button"
+                    disabled={isSaving}
                     onClick={() => {
                       setEstabelecimento(sug.full);
                       setCategoria(sug.cat as CategoryType);
                       setSubcategoria(sug.sub);
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-[#eff4ff] hover:bg-[#dce9ff] text-[#006194] text-[10px] font-bold border border-[#dce9ff] whitespace-nowrap transition-colors cursor-pointer"
+                    className="px-2 py-0.5 rounded-lg bg-[#eff4ff] hover:bg-[#dce9ff] text-[#006194] text-[10px] font-bold border border-[#dce9ff] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {sug.name}
                   </button>
@@ -160,6 +226,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 required
                 value={data}
                 onChange={(e) => setData(e.target.value)}
+                disabled={isSaving}
                 className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl focus:outline-hidden"
               />
             </div>
@@ -171,6 +238,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               <label className="text-xs font-semibold text-[#0b1c30]">Categoria</label>
               <select
                 value={categoria}
+                disabled={isSaving}
                 onChange={(e) => {
                   const newCat = e.target.value as CategoryType;
                   setCategoria(newCat);
@@ -188,6 +256,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               <label className="text-xs font-semibold text-[#0b1c30]">Subcategoria</label>
               <select
                 value={subcategoria}
+                disabled={isSaving}
                 onChange={(e) => setSubcategoria(e.target.value)}
                 className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
               >
@@ -205,26 +274,28 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             <label className="text-xs font-semibold text-[#0b1c30]">Forma de Pagamento</label>
             <select
               value={formaPagamento}
+              disabled={isSaving}
               onChange={(e) => setFormaPagamento(e.target.value)}
               className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
             >
-              <option value="Cartão de Crédito NuBank">Cartão de Crédito NuBank (Compartilhado)</option>
+              <option value="Cartão conjunto Inter">Cartão conjunto Inter (Crédito - Pendente)</option>
               <option value="PIX">PIX</option>
               <option value="Débito em Conta">Débito em Conta</option>
               <option value="Boleto Bancário">Boleto Bancário</option>
               <option value="Dinheiro">Dinheiro Físico</option>
             </select>
             <div className="mt-1.5">
-              {formaPagamento.toLowerCase().includes('credito') ||
+              {formaPagamento.toLowerCase().includes('inter') ||
+              formaPagamento.toLowerCase().includes('credito') ||
               formaPagamento.toLowerCase().includes('crédito') ||
               (formaPagamento.toLowerCase().includes('cartao') &&
                 !formaPagamento.toLowerCase().includes('debito')) ? (
                 <div className="text-[10px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                  💳 <strong>Cartão de Crédito:</strong> Não entra como desembolso imediato de quem passou o cartão. O valor será quitado no fechamento futuro da fatura do casal.
+                  💳 <strong>Cartão conjunto Inter:</strong> Classificado como <strong>Pendente</strong>. Não entra como desembolso imediato de quem passou o cartão; será quitado no fechamento futuro da fatura conjunta do casal.
                 </div>
               ) : (
                 <div className="text-[10px] text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
-                  ✅ <strong>À Vista ({formaPagamento}):</strong> Entra como desembolso imediato de <strong>{responsavel}</strong> para o cálculo de acerto do rateio 50/50.
+                  ✅ <strong>À Vista ({formaPagamento}):</strong> Classificado como <strong>Pago</strong>. Entra como desembolso imediato de <strong>{responsavel}</strong> para o rateio 50/50.
                 </div>
               )}
             </div>
@@ -239,8 +310,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => setResponsavel('Felipe')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
                   responsavel === 'Felipe'
                     ? 'bg-[#2563eb] text-white shadow-xs'
                     : 'bg-[#f8f9ff] text-[#0b1c30] border border-[#cbd5e1] hover:bg-[#eff4ff]'
@@ -253,8 +325,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               </button>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => setResponsavel('Genivânia')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
                   responsavel === 'Genivânia'
                     ? 'bg-[#ec4899] text-white shadow-xs'
                     : 'bg-[#f8f9ff] text-[#0b1c30] border border-[#cbd5e1] hover:bg-[#eff4ff]'
@@ -279,6 +352,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               placeholder="Ex: Compra com desconto, parcelado em 2x..."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
+              disabled={isSaving}
               className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl focus:outline-hidden"
             />
           </div>
@@ -287,15 +361,24 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-[#565e74]"
+              disabled={isSaving}
+              className="px-4 py-2 text-xs font-semibold text-[#565e74] hover:bg-[#f1f5f9] rounded-xl cursor-pointer disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#006948] hover:bg-[#00563b] text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+              disabled={isSaving}
+              className="px-5 py-2.5 bg-[#006948] hover:bg-[#00563b] disabled:bg-[#006948]/60 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-2"
             >
-              Salvar Lançamento
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Salvando no banco...</span>
+                </>
+              ) : (
+                <span>Salvar Lançamento</span>
+              )}
             </button>
           </div>
         </form>

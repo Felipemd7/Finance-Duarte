@@ -140,7 +140,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
         estabelecimento: resolvedNome,
         estabelecimento_id: t.estabelecimento_id,
         formaPagamento: t.forma_pagamento,
-        status: t.status as any,
+        status: (t.status === 'previsto' ? 'pendente' : (t.status || 'pago')) as any,
         pagoPor: t.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia',
         observacoes: t.observacoes || '',
         comprovanteId: t.comprovante_id,
@@ -315,27 +315,71 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
   }
 }
 
+// Mapeamento automático de categorias e subcategorias para o Supabase
+export function mapCategoryToId(cat?: string): string {
+  if (cat === 'Invariável') return 'cat-invariavel';
+  if (cat === 'Extra/Eventualidades') return 'cat-extra';
+  return 'cat-variavel';
+}
+
+export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string {
+  const norm = (nomeSub || '').toLowerCase();
+  if (norm.includes('aluguel')) return 'sub-aluguel';
+  if (norm.includes('condom')) return 'sub-condominio';
+  if (norm.includes('internet') || norm.includes('tv')) return 'sub-internet';
+  if (norm.includes('rastreador')) return 'sub-rastreador';
+  if (norm.includes('seguro')) return 'sub-seguro';
+  if (norm.includes('supermercado') || norm.includes('mercado') || norm.includes('comida') || norm.includes('frigor')) return 'sub-supermercado';
+  if (norm.includes('combust') || norm.includes('posto') || norm.includes('gasolina')) return 'sub-combustivel';
+  if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio')) return 'sub-farmacia';
+  if (norm.includes('lazer') || norm.includes('restaurante') || norm.includes('bar')) return 'sub-lazer';
+  if (norm.includes('luz') || norm.includes('energia')) return 'sub-luz';
+  if (norm.includes('agua') || norm.includes('água')) return 'sub-agua';
+  if (norm.includes('gás') || norm.includes('gas')) return 'sub-gas';
+  if (norm.includes('manuten') && norm.includes('carro')) return 'sub-manutencao-carro';
+  if (norm.includes('ipva')) return 'sub-ipva';
+  if (norm.includes('uber')) return 'sub-uber';
+
+  if (categoria === 'Invariável') return 'sub-aluguel';
+  if (categoria === 'Extra/Eventualidades') return 'sub-eventualidades';
+  return 'sub-supermercado';
+}
+
 // Persist functions to Supabase
-export async function addTransactionToCloud(tx: Transaction): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+export async function addTransactionToCloud(tx: Transaction): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured) return { success: false, error: 'Supabase não está configurado' };
   try {
-    const { error } = await supabase.from('transactions').insert({
+    // No banco de dados Supabase o check constraint aceita 'pago' ou 'previsto'.
+    // Mapeamos 'pendente' -> 'previsto' para garantir gravação sem erro 400.
+    const dbStatus = (tx.status === 'pendente') ? 'previsto' : (tx.status || 'pago');
+    const catId = tx.categoria_id || mapCategoryToId(tx.categoria);
+    const subcatId = tx.subcategoria_id || mapSubcategoryToId(tx.subcategoria, tx.categoria);
+    const formaPgto = tx.formaPagamento || 'Cartão conjunto Inter';
+
+    const payload = {
       id: tx.id,
-      usuario_id: tx.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+      usuario_id: (tx.pagoPor === 'Genivânia' || tx.usuario_id === 'usr-genivania') ? 'usr-genivania' : 'usr-felipe',
       data: tx.data,
-      mes_referencia: tx.data.substring(0, 7),
+      mes_referencia: tx.mesReferencia || tx.data.substring(0, 7),
       valor: tx.valor,
-      tipo: tx.tipo,
-      forma_pagamento: tx.formaPagamento || 'Cartão de Crédito',
-      status: tx.status || 'pago',
-      categoria_id: tx.categoria === 'Invariável' ? 'cat-invariavel' : tx.categoria === 'Extra/Eventualidades' ? 'cat-extra' : 'cat-variavel',
-      subcategoria_id: tx.subcategoria_id || 'sub-supermercado',
+      tipo: tx.tipo || 'despesa',
+      forma_pagamento: formaPgto,
+      status: dbStatus,
+      categoria_id: catId,
+      subcategoria_id: subcatId,
       estabelecimento_nome: tx.estabelecimento,
-      observacoes: tx.observacoes,
-    });
-    return !error;
-  } catch {
-    return false;
+      observacoes: tx.observacoes || null,
+    };
+
+    const { error } = await supabase.from('transactions').insert(payload);
+    if (error) {
+      console.error('[SupabaseService] Erro ao inserir transação manual:', error.message, error.details);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('[SupabaseService] Exceção ao inserir transação:', err);
+    return { success: false, error: err?.message || 'Erro inesperado de conexão' };
   }
 }
 
@@ -406,25 +450,36 @@ export async function deleteTransactionFromCloud(id: string): Promise<boolean> {
   }
 }
 
-export async function updateTransactionInCloud(tx: Transaction): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+export async function updateTransactionInCloud(tx: Transaction): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured) return { success: false, error: 'Supabase não está configurado' };
   try {
+    const dbStatus = (tx.status === 'pendente') ? 'previsto' : (tx.status || 'pago');
+    const catId = tx.categoria_id || mapCategoryToId(tx.categoria);
+    const subcatId = tx.subcategoria_id || mapSubcategoryToId(tx.subcategoria, tx.categoria);
+    const formaPgto = tx.formaPagamento || 'Cartão conjunto Inter';
+
     const { error } = await supabase.from('transactions').update({
-      usuario_id: tx.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+      usuario_id: (tx.pagoPor === 'Genivânia' || tx.usuario_id === 'usr-genivania') ? 'usr-genivania' : 'usr-felipe',
       data: tx.data,
-      mes_referencia: tx.data.substring(0, 7),
+      mes_referencia: tx.mesReferencia || tx.data.substring(0, 7),
       valor: tx.valor,
-      tipo: tx.tipo,
-      forma_pagamento: tx.formaPagamento || 'Cartão de Crédito',
-      status: tx.status || 'pago',
-      categoria_id: tx.categoria === 'Invariável' ? 'cat-invariavel' : tx.categoria === 'Extra/Eventualidades' ? 'cat-extra' : 'cat-variavel',
-      subcategoria_id: tx.subcategoria_id || 'sub-supermercado',
+      tipo: tx.tipo || 'despesa',
+      forma_pagamento: formaPgto,
+      status: dbStatus,
+      categoria_id: catId,
+      subcategoria_id: subcatId,
       estabelecimento_nome: tx.estabelecimento,
-      observacoes: tx.observacoes,
+      observacoes: tx.observacoes || null,
     }).eq('id', tx.id);
-    return !error;
-  } catch {
-    return false;
+
+    if (error) {
+      console.error('[SupabaseService] Erro ao atualizar transação:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('[SupabaseService] Exceção ao atualizar transação:', err);
+    return { success: false, error: err?.message || 'Erro inesperado' };
   }
 }
 
@@ -482,7 +537,7 @@ export async function addFuelLogToCloud(log: FuelLog): Promise<boolean> {
       km_rodados: log.kmRodados || 0,
       consumo_km_l: log.consumoKmPorLitro || 0,
       custo_por_km: log.custoPorKm || 0,
-      forma_pagamento: log.formaPagamento || 'Cartão de Crédito NuBank',
+      forma_pagamento: log.formaPagamento || 'Cartão conjunto Inter',
       comprovante_url: log.comprovanteUrl || null,
       observacoes: log.observacoes || null,
     });
@@ -509,7 +564,7 @@ export async function updateFuelLogInCloud(log: FuelLog): Promise<boolean> {
         km_rodados: log.kmRodados || 0,
         consumo_km_l: log.consumoKmPorLitro || 0,
         custo_por_km: log.custoPorKm || 0,
-        forma_pagamento: log.formaPagamento || 'Cartão de Crédito NuBank',
+        forma_pagamento: log.formaPagamento || 'Cartão conjunto Inter',
         observacoes: log.observacoes || null,
       })
       .eq('id', log.id);

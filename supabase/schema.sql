@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     valor NUMERIC(12, 2) NOT NULL,
     tipo TEXT NOT NULL CHECK (tipo IN ('despesa', 'receita')),
     forma_pagamento TEXT NOT NULL DEFAULT 'Cartão de Crédito',
-    status TEXT NOT NULL CHECK (status IN ('pago', 'previsto')) DEFAULT 'pago',
+    status TEXT NOT NULL CHECK (status IN ('pago', 'previsto', 'pendente')) DEFAULT 'pago',
     categoria_id TEXT NOT NULL REFERENCES public.categories(id),
     subcategoria_id TEXT NOT NULL REFERENCES public.subcategories(id),
     estabelecimento_id TEXT REFERENCES public.establishments(id),

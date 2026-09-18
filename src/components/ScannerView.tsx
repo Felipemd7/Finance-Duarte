@@ -111,7 +111,7 @@ const mapReceiptToViewModel = (r: any) => {
       endereco: 'Teresina, PI',
       ccf: '',
       totalLido: 0,
-      meioPagamento: 'Cartão NuBank Compartilhado',
+      meioPagamento: 'Cartão conjunto Inter',
       comprador: 'Felipe Duarte & Genivânia Duarte',
       itens: [] as any[],
     };
@@ -155,7 +155,7 @@ const mapReceiptToViewModel = (r: any) => {
     endereco: String(r.endereco || 'Teresina, PI'),
     ccf: String(r.ccf || ''),
     totalLido: Number(r.valorTotal) || Number(r.totalLido) || 0,
-    meioPagamento: String(r.meioPagamento || r.formaPagamento || 'Cartão NuBank Compartilhado'),
+    meioPagamento: String(r.meioPagamento || r.formaPagamento || 'Cartão conjunto Inter'),
     comprador: String(r.comprador || r.pagoPor || 'Felipe Duarte & Genivânia Duarte'),
     itens: items,
   };
@@ -203,7 +203,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       endereco: 'Teresina, PI',
       ccf: '',
       totalLido: 0,
-      meioPagamento: 'Cartão NuBank Compartilhado',
+      meioPagamento: 'Cartão conjunto Inter',
       comprador: 'Felipe Duarte & Genivânia Duarte',
       itens: [] as any[],
     };
@@ -425,7 +425,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         endereco: `${uf}, Brasil`,
         ccf: '',
         totalLido: valorEncontrado || 0,
-        meioPagamento: 'Cartão NuBank / PIX',
+        meioPagamento: 'Cartão conjunto Inter',
         comprador: 'Felipe Duarte & Genivânia Duarte',
         itens: [
           {
@@ -564,7 +564,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           meioPagamento:
             d.formaPagamento && d.formaPagamento !== 'Não identificado'
               ? d.formaPagamento
-              : 'Cartão NuBank Compartilhado',
+              : 'Cartão conjunto Inter',
           comprador:
             d.comprador && d.comprador !== 'Não identificado'
               ? d.comprador

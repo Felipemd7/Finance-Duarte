@@ -192,6 +192,8 @@ Retorne ESTRITAMENTE em formato JSON:
   "endereco": "string"
 }`;
 
+  let lastError: any = null;
+
   for (const model of CANDIDATE_MODELS) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;

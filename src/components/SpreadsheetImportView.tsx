@@ -458,7 +458,7 @@ export const SpreadsheetImportView: React.FC<SpreadsheetImportViewProps> = ({
                 <label className="font-semibold text-[#0b1c30]">Observações</label>
                 <input
                   name="observacoes"
-                  placeholder="Ex: Pago por Felipe via NuBank"
+                  placeholder="Ex: Pago por Felipe via Cartão conjunto Inter"
                   className="w-full mt-1 p-2 bg-[#f8f9ff] border rounded-lg"
                 />
               </div>

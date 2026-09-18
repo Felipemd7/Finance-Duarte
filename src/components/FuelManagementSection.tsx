@@ -1279,8 +1279,8 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     onChange={(e) => setFormFormaPagamento(e.target.value)}
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs text-[#0b1c30] focus:outline-none focus:border-[#006948]"
                   >
-                    <option value="Cartão de Crédito">Cartão de Crédito</option>
-                    <option value="PIX NuBank">PIX NuBank</option>
+                    <option value="Cartão conjunto Inter">Cartão conjunto Inter</option>
+                    <option value="PIX">PIX</option>
                     <option value="Débito">Débito</option>
                     <option value="Dinheiro">Dinheiro</option>
                   </select>
