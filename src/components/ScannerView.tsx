@@ -185,11 +185,11 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const qrFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Odômetro mais recente do veículo para referência
+  // Odômetro mais recente do veículo para referência (Marco Zero: 124.524 km)
   const lastKnownKm = React.useMemo(() => {
-    if (!fuelLogs || fuelLogs.length === 0) return 45280;
+    if (!fuelLogs || fuelLogs.length === 0) return 124524;
     const valid = fuelLogs.filter((f) => (f.kmAtual || 0) > 0).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
-    return valid.length > 0 ? valid[valid.length - 1].kmAtual : 45280;
+    return valid.length > 0 ? valid[valid.length - 1].kmAtual : 124524;
   }, [fuelLogs]);
 
   // QR Code Scanner state

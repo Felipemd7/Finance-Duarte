@@ -186,7 +186,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 4. VEÍCULO DA FAMÍLIA DUARTE
 INSERT INTO public.vehicles (id, modelo, placa, ano, odometro_atual, motorista_principal_id, custos_fixos_rateados_km, observacoes) VALUES
-('veh-compass', 'Compass Limited 1.3 Turbo', 'DUA-2026', 2025, 42260, 'usr-felipe', 0.53, 'Carro principal do casal Felipe e Genivânia Duarte')
+('veh-compass', 'Compass Limited 1.3 Turbo', 'DUA-2026', 2025, 124524, 'usr-felipe', 0.53, 'Carro principal do casal Felipe e Genivânia Duarte')
 ON CONFLICT (id) DO NOTHING;
 
 -- 5. TRANSAÇÕES FINANCEIRAS (502 TRANSAÇÕES DE 2026)

@@ -93,28 +93,72 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
       (a, b) => new Date(a.data).getTime() - new Date(b.data).getTime()
     );
 
+    // Identificar o primeiro registro que possui odômetro registrado (Marco Zero)
+    const firstLogWithKmIndex = list.findIndex((item) => (item.kmAtual || 0) > 0);
+
     return list.map((item, index) => {
-      if (index === 0 || !item.kmAtual || item.kmAtual === 0) {
+      const currentKm = item.kmAtual || 0;
+
+      // Sem odômetro anotado
+      if (currentKm === 0) {
         return {
           ...item,
+          isMarcoZero: false,
           kmRodados: 0,
           consumoKmPorLitro: 0,
           custoPorKm: 0,
         };
       }
 
-      const prev = list[index - 1];
-      const deltaKm = prev.kmAtual > 0 && item.kmAtual > prev.kmAtual ? item.kmAtual - prev.kmAtual : 0;
-      const litros = item.litros > 0 ? item.litros : item.valorTotal / (item.precoLitro || 5.8);
-      const kmPorLitro = litros > 0 && deltaKm > 0 ? Number((deltaKm / litros).toFixed(2)) : 0;
+      // Primeiro registro com odômetro: Marco Zero / Ponto de Partida!
+      if (index === firstLogWithKmIndex) {
+        return {
+          ...item,
+          isMarcoZero: true,
+          kmRodados: 0,
+          consumoKmPorLitro: 0,
+          custoPorKm: 0,
+        };
+      }
+
+      // Localizar o abastecimento anterior com odômetro válido
+      let prevWithKm: FuelLog | null = null;
+      let accumulatedLitersSincePrev = item.litros > 0 ? item.litros : item.valorTotal / (item.precoLitro || 5.8);
+
+      for (let i = index - 1; i >= 0; i--) {
+        if ((list[i].kmAtual || 0) > 0) {
+          prevWithKm = list[i];
+          break;
+        } else {
+          // Se houve abastecimentos intermediários sem KM, acumula litros para a média real
+          const intLiters = list[i].litros > 0 ? list[i].litros : list[i].valorTotal / (list[i].precoLitro || 5.8);
+          accumulatedLitersSincePrev += intLiters;
+        }
+      }
+
+      if (!prevWithKm || currentKm <= prevWithKm.kmAtual) {
+        return {
+          ...item,
+          isMarcoZero: false,
+          kmRodados: 0,
+          consumoKmPorLitro: 0,
+          custoPorKm: 0,
+        };
+      }
+
+      const deltaKm = currentKm - prevWithKm.kmAtual;
+      const kmPorLitro = accumulatedLitersSincePrev > 0 && deltaKm > 0
+        ? Number((deltaKm / accumulatedLitersSincePrev).toFixed(2))
+        : 0;
       const custoKm = deltaKm > 0 ? Number((item.valorTotal / deltaKm).toFixed(2)) : 0;
 
-      const d1 = new Date(prev.data).getTime();
+      const d1 = new Date(prevWithKm.data).getTime();
       const d2 = new Date(item.data).getTime();
       const diffDays = Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
 
       return {
         ...item,
+        isMarcoZero: false,
         kmRodados: deltaKm,
         consumoKmPorLitro: kmPorLitro,
         custoPorKm: custoKm,
@@ -128,10 +172,14 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
   // Reverse list for chronological descending view in the table
   const logsDescending = useMemo(() => [...sortedLogs].reverse(), [sortedLogs]);
 
-  // Verifica se há odômetro registrado nos abastecimentos
-  const hasOdometer = useMemo(() => {
-    return sortedLogs.some((item) => (item.kmAtual || 0) > 0);
+  // Registros que possuem odômetro anotado
+  const logsWithKm = useMemo(() => {
+    return sortedLogs.filter((item) => (item.kmAtual || 0) > 0);
   }, [sortedLogs]);
+
+  // Verifica se há odômetro registrado e se há mais de 1 medição para calcular ciclo
+  const hasOdometer = useMemo(() => logsWithKm.length > 0, [logsWithKm]);
+  const hasMultipleKmLogs = useMemo(() => logsWithKm.length > 1, [logsWithKm]);
 
   // 2. Aggregate Key Metrics
   const metrics = useMemo(() => {
@@ -150,36 +198,50 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
         consumoSemanalValor: 0,
         consumoMensalKm: 0,
         consumoMensalValor: 0,
-        ultimoKm: 0,
-        ultimoPrecoLitro: 0,
+        ultimoKm: 124524,
+        ultimoPrecoLitro: 5.85,
+        ultimoPosto: 'Posto Martines',
       };
     }
 
-    const first = sortedLogs[0];
-    const last = sortedLogs[sortedLogs.length - 1];
+    const firstWithKm = logsWithKm.length > 0 ? logsWithKm[0] : null;
+    const lastWithKm = logsWithKm.length > 0 ? logsWithKm[logsWithKm.length - 1] : null;
 
-    const totalKmRodados = hasOdometer && last.kmAtual > first.kmAtual ? last.kmAtual - first.kmAtual : 0;
+    // Total KM rodados estritamente entre medições de odômetro
+    const totalKmRodados =
+      hasMultipleKmLogs && firstWithKm && lastWithKm && lastWithKm.kmAtual > firstWithKm.kmAtual
+        ? lastWithKm.kmAtual - firstWithKm.kmAtual
+        : 0;
+
     const totalGasto = sortedLogs.reduce((sum, item) => sum + item.valorTotal, 0);
     const totalLitros = sortedLogs.reduce((sum, item) => sum + item.litros, 0);
 
+    // Litros e gastos apenas dos ciclos onde o KM foi medido (após marco zero)
+    const logsComCiclo = sortedLogs.filter((item: any) => (item.kmRodados || 0) > 0);
+    const litrosNosCiclosMedidos = logsComCiclo.reduce((sum, item) => sum + item.litros, 0);
+    const gastoNosCiclosMedidos = logsComCiclo.reduce((sum, item) => sum + item.valorTotal, 0);
+
     // Days elapsed between first and last log
+    const first = sortedLogs[0];
+    const last = sortedLogs[sortedLogs.length - 1];
     const dStart = new Date(first.data).getTime();
     const dEnd = new Date(last.data).getTime();
     const totalDays = Math.max(1, Math.round((dEnd - dStart) / (1000 * 60 * 60 * 24)));
 
     // Cost per km of fuel
     const custoCombustivelKm =
-      totalKmRodados > 0 ? Number((totalGasto / totalKmRodados).toFixed(2)) : 0;
+      totalKmRodados > 0 && gastoNosCiclosMedidos > 0
+        ? Number((gastoNosCiclosMedidos / totalKmRodados).toFixed(2))
+        : 0;
 
     // Real Total Cost per KM = Fuel + Fixed costs share
-    const custoRealTotalKm = totalKmRodados > 0 ? Number((custoCombustivelKm + custosFixosRateadosKm).toFixed(2)) : 0;
+    const custoRealTotalKm =
+      custoCombustivelKm > 0 ? Number((custoCombustivelKm + custosFixosRateadosKm).toFixed(2)) : 0;
 
-    // Average km/L
-    const measuredLogs = sortedLogs.slice(1);
-    const measuredLitros = measuredLogs.reduce((sum, item) => sum + item.litros, 0);
+    // Average km/L baseado apenas nos ciclos medidos
     const kmPorLitroMedio =
-      measuredLitros > 0 && totalKmRodados > 0
-        ? Number((totalKmRodados / measuredLitros).toFixed(2))
+      totalKmRodados > 0 && litrosNosCiclosMedidos > 0
+        ? Number((totalKmRodados / litrosNosCiclosMedidos).toFixed(2))
         : 0;
 
     // Average price per litre
@@ -212,11 +274,11 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
       consumoSemanalValor,
       consumoMensalKm,
       consumoMensalValor,
-      ultimoKm: last.kmAtual,
-      ultimoPrecoLitro: last.precoLitro,
-      ultimoPosto: last.posto,
+      ultimoKm: lastWithKm ? lastWithKm.kmAtual : 124524,
+      ultimoPrecoLitro: lastWithKm ? lastWithKm.precoLitro : last.precoLitro,
+      ultimoPosto: lastWithKm ? lastWithKm.posto : last.posto,
     };
-  }, [sortedLogs, custosFixosRateadosKm]);
+  }, [sortedLogs, logsWithKm, hasMultipleKmLogs, custosFixosRateadosKm]);
 
   // 3. Chart Data Generation based on selected periodView
   const chartData = useMemo(() => {
@@ -308,13 +370,12 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     setFormPosto('');
     setFormCombustivel('Gasolina Comum');
     setFormValorTotal('');
-    setFormPrecoLitro('5.85');
+    setFormPrecoLitro('');
     setFormLitros('');
-    // Suggest the next estimated KM based on last registered KM
-    const nextKm = metrics.ultimoKm > 0 ? (metrics.ultimoKm + 500).toString() : '41800';
-    setFormKmAtual(nextKm);
+    // Campo de KM fica vazio para digitação do odômetro real do painel
+    setFormKmAtual('');
     setFormPagoPor('Felipe');
-    setFormFormaPagamento('Cartão de Crédito');
+    setFormFormaPagamento('Cartão conjunto Inter');
     setFormObservacoes('');
     setFormReceiptName('');
     setIsModalOpen(true);
@@ -338,13 +399,22 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     setIsModalOpen(true);
   };
 
-  // Synchronize liters when Total or Price/L changes
+  // Sincronização inteligente e automática entre Total Pago, Preço por Litro e Litros
   const handleTotalChange = (val: string) => {
     setFormValorTotal(val);
     const numTotal = parseFloat(val.replace(',', '.')) || 0;
     const numPreco = parseFloat(formPrecoLitro.replace(',', '.')) || 0;
-    if (numTotal > 0 && numPreco > 0) {
-      setFormLitros((numTotal / numPreco).toFixed(2));
+    const numLitros = parseFloat(formLitros.replace(',', '.')) || 0;
+
+    if (numTotal > 0) {
+      if (numPreco > 0) {
+        // Se já tem preço do litro, calcula o volume em litros
+        setFormLitros((numTotal / numPreco).toFixed(2));
+      } else if (numLitros > 0) {
+        // Se já tem litros preenchido, calcula o preço por litro
+        const p = numTotal / numLitros;
+        setFormPrecoLitro(Number.isInteger(p * 100) ? p.toFixed(2) : p.toFixed(3));
+      }
     }
   };
 
@@ -352,17 +422,34 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     setFormPrecoLitro(val);
     const numPreco = parseFloat(val.replace(',', '.')) || 0;
     const numTotal = parseFloat(formValorTotal.replace(',', '.')) || 0;
-    if (numTotal > 0 && numPreco > 0) {
-      setFormLitros((numTotal / numPreco).toFixed(2));
+    const numLitros = parseFloat(formLitros.replace(',', '.')) || 0;
+
+    if (numPreco > 0) {
+      if (numTotal > 0) {
+        // Total informado -> calcula volume em litros automaticamente
+        setFormLitros((numTotal / numPreco).toFixed(2));
+      } else if (numLitros > 0) {
+        // Volume em litros informado -> calcula o valor total
+        setFormValorTotal((numLitros * numPreco).toFixed(2));
+      }
     }
   };
 
   const handleLitrosChange = (val: string) => {
     setFormLitros(val);
     const numLitros = parseFloat(val.replace(',', '.')) || 0;
+    const numTotal = parseFloat(formValorTotal.replace(',', '.')) || 0;
     const numPreco = parseFloat(formPrecoLitro.replace(',', '.')) || 0;
-    if (numLitros > 0 && numPreco > 0 && !formValorTotal) {
-      setFormValorTotal((numLitros * numPreco).toFixed(2));
+
+    if (numLitros > 0) {
+      if (numTotal > 0) {
+        // Total informado -> calcula o preço do litro automaticamente
+        const p = numTotal / numLitros;
+        setFormPrecoLitro(Number.isInteger(p * 100) ? p.toFixed(2) : p.toFixed(3));
+      } else if (numPreco > 0) {
+        // Preço do litro informado -> calcula o valor total
+        setFormValorTotal((numLitros * numPreco).toFixed(2));
+      }
     }
   };
 
@@ -459,9 +546,20 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
     e.preventDefault();
 
     const numTotal = parseFloat(formValorTotal.replace(',', '.')) || 0;
-    const numPreco = parseFloat(formPrecoLitro.replace(',', '.')) || 5.85;
-    const numLitros =
-      parseFloat(formLitros.replace(',', '.')) || (numTotal > 0 ? numTotal / numPreco : 0);
+    let numPreco = parseFloat(formPrecoLitro.replace(',', '.')) || 0;
+    let numLitros = parseFloat(formLitros.replace(',', '.')) || 0;
+
+    if (numTotal > 0) {
+      if (numPreco <= 0 && numLitros > 0) {
+        numPreco = numTotal / numLitros;
+      } else if (numLitros <= 0 && numPreco > 0) {
+        numLitros = numTotal / numPreco;
+      } else if (numPreco <= 0 && numLitros <= 0) {
+        numPreco = 5.85;
+        numLitros = numTotal / 5.85;
+      }
+    }
+
     const numKm = parseInt(formKmAtual.replace(/\D/g, ''), 10) || 0;
 
     if (numTotal <= 0) {
@@ -563,7 +661,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
               </span>
               <div>
                 <div className="font-bold text-[#0b1c30] flex items-center gap-2">
-                  <span>Jeep Compass Longitude Turbo</span>
+                  <span>{veiculoInfo}</span>
                   <span className="px-2 py-0.5 rounded-full bg-[#f1f5f9] text-[#565e74] text-[10px] font-semibold border border-[#e2e8f0]">
                     Odômetro nos abastecimentos não registrado
                   </span>
@@ -572,6 +670,31 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                   As métricas de KM/L e Custo por KM estão desativadas para preservar a precisão dos dados. Ao registrar futuros abastecimentos informando o Odômetro (KM), o cálculo automático de consumo será ativado.
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Banner de Marco Zero Ativo (1º registro com KM cadastrado) */}
+        {hasOdometer && !hasMultipleKmLogs && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-emerald-50 border border-blue-200/80 flex items-center justify-between flex-wrap gap-2 text-xs">
+            <div className="flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-white text-[#006194] shadow-2xs border border-blue-200">
+                <Gauge className="w-4 h-4 text-[#006948]" />
+              </span>
+              <div>
+                <div className="font-bold text-[#0b1c30] flex items-center gap-2">
+                  <span>Odômetro Inicial: {metrics.ultimoKm.toLocaleString('pt-BR')} km</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#006948] text-[10px] font-extrabold border border-emerald-300">
+                    📍 Marco Zero Definido
+                  </span>
+                </div>
+                <p className="text-[#565e74] text-[11px] mt-0.5">
+                  Cadastrado em 16/09/2026 no Posto Martines. A partir do próximo abastecimento registrado com o KM atual, a média de KM/L e o custo real por KM serão calculados automaticamente.
+                </p>
+              </div>
+            </div>
+            <div className="text-[11px] font-mono font-bold text-[#006194] bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-2xs">
+              Base: {metrics.ultimoKm.toLocaleString('pt-BR')} km
             </div>
           </div>
         )}
@@ -590,18 +713,26 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
             </div>
             <div className="my-1.5">
               <div className="font-display font-extrabold text-2xl text-[#005a3c] font-mono leading-none">
-                {hasOdometer && metrics.custoRealTotalKm > 0 ? formatBRL(metrics.custoRealTotalKm) : '—'}
+                {hasMultipleKmLogs && metrics.custoRealTotalKm > 0 ? formatBRL(metrics.custoRealTotalKm) : '—'}
               </div>
               <span className="text-[10px] font-semibold text-[#565e74] block mt-1">
-                {hasOdometer ? `${formatBRL(metrics.custoCombustivelKm)} comb. + ${formatBRL(custosFixosRateadosKm)} fixo` : 'Aguardando registro de Odômetro'}
+                {hasMultipleKmLogs
+                  ? `${formatBRL(metrics.custoCombustivelKm)} comb. + ${formatBRL(custosFixosRateadosKm)} fixo`
+                  : hasOdometer
+                  ? `Marco Zero ativo (${metrics.ultimoKm.toLocaleString('pt-BR')} km)`
+                  : 'Aguardando registro de Odômetro'}
               </span>
             </div>
             <div className="pt-2 border-t border-[#e2e8f0]/60 flex items-center justify-between text-[10px]">
               <span className="text-[#006948] font-bold">
-                {hasOdometer && metrics.kmPorLitroMedio > 0 ? `${metrics.kmPorLitroMedio} km/L médio` : 'Métrica pausada'}
+                {hasMultipleKmLogs && metrics.kmPorLitroMedio > 0
+                  ? `${metrics.kmPorLitroMedio} km/L médio`
+                  : hasOdometer
+                  ? 'Próximo abastecimento ativará média'
+                  : 'Métrica pausada'}
               </span>
               <span className="text-[#565e74] font-mono">
-                {hasOdometer ? `${metrics.totalKmRodados.toLocaleString('pt-BR')} km total` : '0 km anotados'}
+                {hasOdometer ? `${metrics.ultimoKm.toLocaleString('pt-BR')} km no painel` : '0 km anotados'}
               </span>
             </div>
           </div>
@@ -890,7 +1021,11 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     </td>
 
                     <td className="py-3 px-2 text-right font-mono text-[#006194] font-bold">
-                      {log.kmRodados && log.kmRodados > 0 ? (
+                      {(log as any).isMarcoZero ? (
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#006194] text-[10px] font-bold border border-blue-200">
+                          📍 Marco Zero
+                        </span>
+                      ) : log.kmRodados && log.kmRodados > 0 ? (
                         `+${log.kmRodados} km`
                       ) : (
                         <span className="text-[#94a3b8] text-[10px]">—</span>
@@ -905,7 +1040,9 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     </td>
 
                     <td className="py-3 px-2 text-right font-mono font-bold text-[#006948]">
-                      {log.consumoKmPorLitro && log.consumoKmPorLitro > 0 ? (
+                      {(log as any).isMarcoZero ? (
+                        <span className="text-[10px] text-[#006194] font-semibold">Odômetro Inicial</span>
+                      ) : log.consumoKmPorLitro && log.consumoKmPorLitro > 0 ? (
                         `${log.consumoKmPorLitro} km/L`
                       ) : (
                         <span className="text-[#94a3b8] text-[10px]">—</span>
@@ -913,7 +1050,9 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     </td>
 
                     <td className="py-3 px-2 text-right font-mono font-bold text-[#005a3c]">
-                      {log.custoPorKm && log.custoPorKm > 0 ? (
+                      {(log as any).isMarcoZero ? (
+                        <span className="text-[10px] text-[#565e74]">Ponto de partida</span>
+                      ) : log.custoPorKm && log.custoPorKm > 0 ? (
                         `${formatBRL(log.custoPorKm)}/km`
                       ) : (
                         <span className="text-[#94a3b8] text-[10px]">—</span>
@@ -1147,7 +1286,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                   type="number"
                   value={formKmAtual}
                   onChange={(e) => setFormKmAtual(e.target.value)}
-                  placeholder="Ex: 85000 (Opcional - deixe vazio se não anotou)"
+                  placeholder={lastKnownKm > 0 ? `Ex: ${lastKnownKm + 400} (anterior: ${lastKnownKm.toLocaleString('pt-BR')} km)` : 'Ex: 124900'}
                   className="w-full px-3 py-2 bg-white border border-[#dce9ff] rounded-xl text-sm font-mono font-bold text-[#0b1c30] focus:outline-none focus:border-[#006194]"
                 />
                 {computedDeltaKm > 0 && (
@@ -1200,7 +1339,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
                     step="0.01"
                     value={formValorTotal}
                     onChange={(e) => handleTotalChange(e.target.value)}
-                    placeholder="Ex: 260.00"
+                    placeholder="Ex: 200.00"
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs font-mono font-bold text-[#0b1c30] focus:outline-none focus:border-[#006948]"
                     required
                   />
@@ -1208,31 +1347,29 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
                 <div>
                   <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Preço do Litro (R$/L) *
+                    Preço / Litro <span className="text-[10px] text-[#006194] font-normal block">Auto ou manual</span>
                   </label>
                   <input
                     type="number"
                     step="0.001"
                     value={formPrecoLitro}
                     onChange={(e) => handlePrecoChange(e.target.value)}
-                    placeholder="Ex: 5.85"
+                    placeholder="Ex: 5.89"
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs font-mono text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                    required
                   />
                 </div>
 
                 <div>
                   <label className="text-xs font-semibold text-[#0b1c30] block mb-1">
-                    Volume (Litros)
+                    Litros (L) <span className="text-[10px] text-[#006194] font-normal block">Auto ou manual</span>
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     value={formLitros}
                     onChange={(e) => handleLitrosChange(e.target.value)}
-                    placeholder="Ex: 44.44"
+                    placeholder="Ex: 35.00"
                     className="w-full px-3 py-2 bg-[#f8faff] border border-[#dce9ff] rounded-xl text-xs font-mono text-[#0b1c30] focus:outline-none focus:border-[#006948]"
-                    required
                   />
                 </div>
               </div>

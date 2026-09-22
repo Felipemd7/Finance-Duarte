@@ -377,14 +377,16 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2 animate-in fade-in">
               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
                 <Fuel className="w-3.5 h-3.5 text-amber-700" />
-                <span>Telemetria do Veículo (Jeep Compass • Módulo de Metas)</span>
+                <span>Telemetria do Veículo (Módulo de Metas • Marco: 124.524 km)</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <div>
-                  <label className="text-[10px] font-semibold text-amber-900 block">Odômetro Atual (KM)</label>
+                  <label className="text-[10px] font-semibold text-amber-900 block">
+                    Odômetro Atual (KM) <span className="font-normal text-amber-700 font-mono">(último: 124.524 km)</span>
+                  </label>
                   <input
                     type="number"
-                    placeholder="ex: 45420"
+                    placeholder="ex: 124900"
                     value={kmAtual}
                     onChange={(e) => setKmAtual(e.target.value)}
                     disabled={isSaving}

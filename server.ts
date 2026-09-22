@@ -730,7 +730,7 @@ app.post('/api/scan-fuel-receipt', async (req, res) => {
           precoLitro: 5.95,
           litros: 47.03,
           data: '2026-03-11',
-          km: 42260,
+          km: 124524,
           numeroCupom: 'NFC-e #284102',
           formaPagamento: 'Mastercard Crédito',
           cnpj: '33.241.890/0001-12',
