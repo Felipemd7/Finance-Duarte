@@ -1186,7 +1186,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
           onDeleteFuelLog={handleDeleteFuelLog}
           onShowToast={onShowToast}
           veiculoInfo="Jeep Compass Longitude Turbo • Placa DUA-2026"
-          custosFixosRateadosKm={0.53}
+          custosFixosRateadosKm={0}
         />
       </div>
 

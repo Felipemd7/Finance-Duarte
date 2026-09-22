@@ -34,10 +34,34 @@ import {
 } from './services/supabaseService';
 import { getCurrentMonthName } from './utils/formatters';
 
+const VALID_TABS = ['dashboard', 'extrato', 'scanner', 'metas', 'lista', 'relatorios', 'voz'];
+
+const getInitialTab = (): string => {
+  try {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '').trim().toLowerCase();
+      if (VALID_TABS.includes(hash)) {
+        return hash;
+      }
+      const saved = localStorage.getItem('duarte_active_tab');
+      if (saved && VALID_TABS.includes(saved)) {
+        return saved;
+      }
+    }
+  } catch {}
+  return 'dashboard';
+};
+
 export default function App() {
-  // Current active tab - default to 'dashboard' (Visão Consolidada do Casal)
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => getCurrentMonthName());
+  // Current active tab - preserva a página atual ao recarregar via URL hash e localStorage
+  const [currentTab, setCurrentTab] = useState<string>(getInitialTab);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('duarte_selected_month');
+      if (saved) return saved;
+    } catch {}
+    return getCurrentMonthName();
+  });
   const [activeUser, setActiveUser] = useState<string>('casal');
   const [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null);
 
@@ -179,6 +203,41 @@ export default function App() {
       console.warn('[App] LocalStorage quota para fuel_logs:', err);
     }
   }, [fuelLogs]);
+
+  // Sincroniza a aba ativa com a URL e com o localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('duarte_active_tab', currentTab);
+      if (typeof window !== 'undefined' && window.location.hash.replace('#', '') !== currentTab) {
+        window.history.replaceState(null, '', `#${currentTab}`);
+      }
+    } catch (err) {
+      console.warn('[App] Erro ao sincronizar aba ativa:', err);
+    }
+  }, [currentTab]);
+
+  // Listener para evento hashchange (ex: botões voltar/avançar do navegador)
+  useEffect(() => {
+    const handleHashChange = () => {
+      try {
+        const hash = window.location.hash.replace('#', '').trim().toLowerCase();
+        if (VALID_TABS.includes(hash)) {
+          setCurrentTab(hash);
+        }
+      } catch {}
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Sincroniza o mês selecionado com o localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('duarte_selected_month', selectedMonth);
+    } catch (err) {
+      console.warn('[App] Erro ao sincronizar mês selecionado:', err);
+    }
+  }, [selectedMonth]);
 
   // Handlers para Abastecimentos de Combustível (Compass)
   const handleAddFuelLog = async (log: FuelLog) => {

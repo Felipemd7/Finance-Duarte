@@ -37,6 +37,7 @@ import {
 import { FuelLog } from '../types';
 import { formatBRL } from '../utils/formatters';
 import { analyzeFuelReceiptDirect } from '../services/clientOcrService';
+import { FuelCustomAnalyticsDashboard } from './FuelCustomAnalyticsDashboard';
 
 interface FuelManagementSectionProps {
   fuelLogs: FuelLog[];
@@ -55,7 +56,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
   onDeleteFuelLog,
   onShowToast,
   veiculoInfo = 'Jeep Compass Longitude Turbo • Placa DUA-2026',
-  custosFixosRateadosKm = 0.53,
+  custosFixosRateadosKm = 0,
 }) => {
   // Active period filter for analytics: 'diario' | 'semanal' | 'mensal'
   const [periodView, setPeriodView] = useState<'diario' | 'semanal' | 'mensal'>('mensal');
@@ -234,9 +235,8 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
         ? Number((gastoNosCiclosMedidos / totalKmRodados).toFixed(2))
         : 0;
 
-    // Real Total Cost per KM = Fuel + Fixed costs share
-    const custoRealTotalKm =
-      custoCombustivelKm > 0 ? Number((custoCombustivelKm + custosFixosRateadosKm).toFixed(2)) : 0;
+    // Custo por KM do combustível (sem custos fixos)
+    const custoRealTotalKm = custoCombustivelKm > 0 ? Number(custoCombustivelKm.toFixed(2)) : 0;
 
     // Average km/L baseado apenas nos ciclos medidos
     const kmPorLitroMedio =
@@ -620,7 +620,11 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
       : null;
 
   return (
-    <div className="bg-white rounded-3xl p-6 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
+    <div className="flex flex-col gap-6">
+      {/* --------------------------------------------------------------------- */}
+      {/* 1. PAINEL PRINCIPAL DE TELEMETRIA & ABASTECIMENTOS                    */}
+      {/* --------------------------------------------------------------------- */}
+      <div className="bg-white rounded-3xl p-6 border border-[#e5eeff] shadow-[0_2px_12px_rgba(11,28,48,0.03)] flex flex-col justify-between">
       {/* --------------------------------------------------------------------- */}
       {/* HEADER SECTION                                                        */}
       {/* --------------------------------------------------------------------- */}
@@ -703,10 +707,10 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
         {/* KPI CARDS ROW: Custo Real / KM, Consumo Diário, Semanal, Mensal      */}
         {/* --------------------------------------------------------------------- */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          {/* Card 1: Custo Real por KM */}
+          {/* Card 1: Custo de Combustível por KM */}
           <div className="bg-[#f8faff] rounded-2xl p-4 border border-[#e5eeff] flex flex-col justify-between hover:border-[#006948]/30 transition-colors">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#565e74]">Custo Real / KM</span>
+              <span className="text-xs font-bold text-[#565e74]">Custo / KM (Gasolina)</span>
               <span className="p-1.5 rounded-xl bg-[#ecfdf5] text-[#006948]">
                 <Gauge className="w-3.5 h-3.5" />
               </span>
@@ -717,7 +721,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
               </div>
               <span className="text-[10px] font-semibold text-[#565e74] block mt-1">
                 {hasMultipleKmLogs
-                  ? `${formatBRL(metrics.custoCombustivelKm)} comb. + ${formatBRL(custosFixosRateadosKm)} fixo`
+                  ? `${formatBRL(metrics.custoCombustivelKm)} por km rodado`
                   : hasOdometer
                   ? `Marco Zero ativo (${metrics.ultimoKm.toLocaleString('pt-BR')} km)`
                   : 'Aguardando registro de Odômetro'}
@@ -1123,7 +1127,7 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-[#005a3c]">
-            Custo real apurado: {formatBRL(metrics.custoRealTotalKm)}/km rodado
+            Custo de combustível: {formatBRL(metrics.custoRealTotalKm)}/km rodado
           </span>
           <button
             type="button"
@@ -1135,6 +1139,12 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
           </button>
         </div>
       </div>
+      </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* 2. DASHBOARD PERSONALIZADO & COMPARADOR DE POSTOS                    */}
+      {/* --------------------------------------------------------------------- */}
+      <FuelCustomAnalyticsDashboard fuelLogs={fuelLogs} />
 
       {/* ========================================================================= */}
       {/* MODAL: REGISTRAR ABASTECIMENTO (MANUAL OU COMPROVANTE IA)                 */}

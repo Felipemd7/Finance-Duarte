@@ -64,6 +64,18 @@ Este documento serve como diretriz e memória de contexto para o projeto de fina
 - **Cálculo Automático no Formulário Manual:** O formulário sincroniza dinamicamente:
   - `Total Pago` + `Preço do Litro` ➔ calcula automaticamente o `Volume (Litros)`.
   - `Total Pago` + `Volume (Litros)` ➔ calcula automaticamente o `Preço do Litro`.
-  - `Preço do Litro` + `Volume (Litros)` ➔ calcula automaticamente o `Total Pago`.
   - Os campos inicializam vazios para evitar interferência de valores fixos hardcoded.
+- **Foco Exclusivo em Combustível (Sem Custos Fixos):** O rateio de despesas fixas (IPVA/Seguro de R$ 0,53/km) foi desativado da telemetria a pedido do usuário; o cálculo de Custo/KM reflete estritamente o gasto direto com combustível dividido pela quilometragem percorrida.
+- **Dashboard Personalizado & Comparador de Postos (`FuelCustomAnalyticsDashboard.tsx`):**
+  - Posicionado logo abaixo do painel principal sem alterar sua estrutura.
+  - Permite seleção de postos (chips) ou seleção individual de abastecimentos (checklist manual com marcar/desmarcar todos).
+  - Recalcula KPIs dinâmicos da seleção (Gasto Total, Litros, Preço Médio, KM/L e Custo/KM de gasolina).
+  - Comparador inteligente de postos: identifica o posto de maior autonomia (mais km/l), maior consumo (rende menos) e menor preço por litro, acompanhado de gráfico de barras interativo.
+
+---
+
+## 🧭 Navegação & Persistência de Tela (Reload / F5)
+- Ao navegar entre as abas (`dashboard`, `extrato`, `scanner`, `metas`, `lista`, `relatorios`, `voz`), a aba ativa é mantida sincronizada no hash da URL (`#metas`, `#extrato`, etc.) e no `localStorage` (`duarte_active_tab`).
+- Ao recarregar a página (F5 ou refresh do navegador), o `App.tsx` restaura automaticamente a tela e o mês (`duarte_selected_month`) que estavam sendo visualizados, evitando o redirecionamento forçado para a dashboard.
+- Suporta também histórico do navegador (botões avançar/voltar via listener de `hashchange`).
 
