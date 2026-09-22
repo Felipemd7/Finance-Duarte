@@ -124,16 +124,6 @@ const DEFAULT_CATEGORIES: BudgetCategoryItem[] = [
     alertPercent: 85,
     type: 'expense',
   },
-  {
-    id: 'reserva',
-    name: 'Reserva & Investimentos',
-    spent: 0,
-    limit: 3500,
-    icon: 'piggy',
-    note: '',
-    alertPercent: 85,
-    type: 'saving',
-  },
 ];
 
 const DEFAULT_CAR_COSTS: CarPlanningItem[] = [];
@@ -234,21 +224,28 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     if (saved) {
       try {
         const parsed: BudgetCategoryItem[] = JSON.parse(saved);
-        // Higieniza qualquer resquício de saldo ou texto estático mockado
-        return parsed.map((c) => ({
-          ...c,
-          spent: (c.type === 'saving' || c.id === 'reserva' || (c.name && c.name.toLowerCase().includes('reserva'))) ? 0 : (c.spent || 0),
-          alertPercent: c.alertPercent || 85,
-          note:
-            c.note &&
-            (c.note.includes('não essenciais') ||
-              c.note.includes('dias no ciclo') ||
-              c.note.includes('regular e controlado') ||
-              c.note.includes('imprevistos médicos') ||
-              c.note.includes('atingida!'))
-              ? ''
-              : c.note || '',
-        }));
+        // Higieniza qualquer resquício de saldo ou texto estático mockado e remove a categoria reserva
+        return parsed
+          .filter(
+            (c) =>
+              c.id !== 'reserva' &&
+              c.type !== 'saving' &&
+              !(c.name && c.name.toLowerCase().includes('reserva'))
+          )
+          .map((c) => ({
+            ...c,
+            spent: c.spent || 0,
+            alertPercent: c.alertPercent || 85,
+            note:
+              c.note &&
+              (c.note.includes('não essenciais') ||
+                c.note.includes('dias no ciclo') ||
+                c.note.includes('regular e controlado') ||
+                c.note.includes('imprevistos médicos') ||
+                c.note.includes('atingida!'))
+                ? ''
+                : c.note || '',
+          }));
       } catch {
         return DEFAULT_CATEGORIES;
       }
@@ -923,7 +920,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
         </div>
 
         {/* Category Budget Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {categories.map((cat) => {
               const realSpent = calculateRealSpent(cat);
               const limit = cat.limit || 1;
