@@ -71,6 +71,9 @@ Este documento serve como diretriz e memória de contexto para o projeto de fina
   - Permite seleção de postos (chips) ou seleção individual de abastecimentos (checklist manual com marcar/desmarcar todos).
   - Recalcula KPIs dinâmicos da seleção (Gasto Total, Litros, Preço Médio, KM/L e Custo/KM de gasolina).
   - Comparador inteligente de postos: identifica o posto de maior autonomia (mais km/l), maior consumo (rende menos) e menor preço por litro, acompanhado de gráfico de barras interativo.
+- **Unificação dos 3 Canais de Abastecimento (Regra de Ouro):**
+  - Todo abastecimento (seja lançado manualmente em Transações, lido por IA no Scanner ou cadastrado em Metas/Carro) é **simultaneamente** uma despesa financeira (`transactions` com subcategoria `sub-combustivel`) e um registro de telemetria veicular (`fuel_logs` com `transacao_id`).
+  - **Sincronização Bidirecional:** A inclusão, edição ou exclusão de um abastecimento em qualquer um dos 3 módulos reflete automaticamente nos outros em tempo real (tanto no banco Supabase quanto nos estados locais do React sem necessidade de refresh).
 
 ---
 

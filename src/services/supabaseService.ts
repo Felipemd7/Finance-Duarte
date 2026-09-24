@@ -380,6 +380,15 @@ export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string
   return 'sub-supermercado';
 }
 
+function normalizeFuelType(fuel?: string): 'Gasolina Comum' | 'Gasolina Aditivada' | 'Etanol' | 'Diesel' {
+  if (!fuel) return 'Gasolina Comum';
+  const f = fuel.toLowerCase();
+  if (f.includes('aditivad')) return 'Gasolina Aditivada';
+  if (f.includes('etanol') || f.includes('álcool') || f.includes('alcool')) return 'Etanol';
+  if (f.includes('diesel')) return 'Diesel';
+  return 'Gasolina Comum';
+}
+
 // Persist functions to Supabase
 export async function addTransactionToCloud(tx: Transaction): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseConfigured) return { success: false, error: 'Supabase não está configurado' };
@@ -411,6 +420,33 @@ export async function addTransactionToCloud(tx: Transaction): Promise<{ success:
       console.error('[SupabaseService] Erro ao inserir transação manual:', error.message, error.details);
       return { success: false, error: error.message };
     }
+
+    // Se for combustível, sincronizar automaticamente em fuel_logs
+    if (subcatId === 'sub-combustivel' || tx.subcategoria === 'Combustível') {
+      try {
+        const precoL = (tx.litros && tx.valor) ? Number((tx.valor / tx.litros).toFixed(2)) : 5.85;
+        const lit = tx.litros || Number((tx.valor / precoL).toFixed(2));
+        const fuelId = `fuel-${tx.id.replace('tx-', '')}`;
+        await supabase.from('fuel_logs').upsert({
+          id: fuelId,
+          veiculo_id: 'veh-compass',
+          usuario_id: (tx.pagoPor === 'Genivânia' || tx.usuario_id === 'usr-genivania') ? 'usr-genivania' : 'usr-felipe',
+          data: tx.data.slice(0, 10),
+          posto_nome: tx.estabelecimento || 'Posto de Combustível',
+          combustivel: normalizeFuelType(tx.combustivel),
+          valor_total: tx.valor,
+          preco_litro: precoL,
+          litros: lit,
+          km_atual: tx.kmAtual || 0,
+          forma_pagamento: formaPgto,
+          transacao_id: tx.id,
+          observacoes: tx.observacoes || null,
+        }, { onConflict: 'id' });
+      } catch (fuelErr) {
+        console.warn('[SupabaseService] Erro ao sincronizar abastecimento em fuel_logs:', fuelErr);
+      }
+    }
+
     return { success: true };
   } catch (err: any) {
     console.error('[SupabaseService] Exceção ao inserir transação:', err);
@@ -478,6 +514,8 @@ export async function batchToggleShoppingItemsInCloud(ids: string[], comprado: b
 export async function deleteTransactionFromCloud(id: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
+    await supabase.from('purchase_items').delete().eq('transacao_id', id);
+    await supabase.from('fuel_logs').delete().eq('transacao_id', id);
     const { error } = await supabase.from('transactions').delete().eq('id', id);
     return !error;
   } catch {
@@ -513,21 +551,28 @@ export async function updateTransactionInCloud(tx: Transaction): Promise<{ succe
     }
 
     // Se for Combustível, sincronizar dados de telemetria em fuel_logs
-    if (subcatId === 'sub-combustivel') {
+    if (subcatId === 'sub-combustivel' || tx.subcategoria === 'Combustível') {
       try {
+        const precoL = (tx.litros && tx.valor) ? Number((tx.valor / tx.litros).toFixed(2)) : 5.85;
+        const lit = tx.litros || Number((tx.valor / precoL).toFixed(2));
+        const fuelId = `fuel-${tx.id.replace('tx-', '')}`;
         const updateFuelObj: any = {
-          data: tx.data,
-          posto_nome: tx.estabelecimento,
+          id: fuelId,
+          veiculo_id: 'veh-compass',
+          data: tx.data.slice(0, 10),
+          posto_nome: tx.estabelecimento || 'Posto de Combustível',
+          combustivel: normalizeFuelType(tx.combustivel),
           valor_total: tx.valor,
+          preco_litro: precoL,
+          litros: lit,
           forma_pagamento: formaPgto,
           usuario_id: (tx.pagoPor === 'Genivânia' || tx.usuario_id === 'usr-genivania') ? 'usr-genivania' : 'usr-felipe',
+          transacao_id: tx.id,
         };
-        if (tx.kmAtual) updateFuelObj.km_atual = tx.kmAtual;
-        if (tx.litros) updateFuelObj.litros = tx.litros;
-        if (tx.combustivel) updateFuelObj.combustivel = tx.combustivel;
-        if (tx.litros && tx.valor) updateFuelObj.preco_litro = Number((tx.valor / tx.litros).toFixed(2));
+        if (tx.kmAtual !== undefined) updateFuelObj.km_atual = tx.kmAtual;
+        if (tx.observacoes) updateFuelObj.observacoes = tx.observacoes;
 
-        await supabase.from('fuel_logs').update(updateFuelObj).eq('transacao_id', tx.id);
+        await supabase.from('fuel_logs').upsert(updateFuelObj, { onConflict: 'id' });
       } catch (fuelUpErr) {
         console.warn('[SupabaseService] Aviso ao sincronizar fuel_log vinculado:', fuelUpErr);
       }
@@ -580,13 +625,40 @@ export async function deleteShoppingItemInCloud(id: string): Promise<boolean> {
 export async function addFuelLogToCloud(log: FuelLog): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
+    const txId = log.transacaoId || `tx-${log.id.replace('fuel-', '')}`;
+    const formaPgto = log.formaPagamento || 'Cartão conjunto Inter';
+    const isCredit = formaPgto.toLowerCase().includes('inter') ||
+                     formaPgto.toLowerCase().includes('credito') ||
+                     formaPgto.toLowerCase().includes('crédito');
+
+    // 1. Garante que exista a transação financeira vinculada no Extrato e Fechamento
+    const { error: txErr } = await supabase.from('transactions').upsert({
+      id: txId,
+      usuario_id: log.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+      data: log.data.slice(0, 10),
+      mes_referencia: log.data.slice(0, 7),
+      valor: log.valorTotal,
+      tipo: 'despesa',
+      forma_pagamento: formaPgto,
+      status: isCredit ? 'previsto' : 'pago',
+      categoria_id: 'cat-variavel',
+      subcategoria_id: 'sub-combustivel',
+      estabelecimento_nome: log.posto,
+      observacoes: log.observacoes || `Abastecimento em ${log.posto}`,
+    }, { onConflict: 'id' });
+
+    if (txErr) {
+      console.warn('[SupabaseService] Aviso ao sincronizar transação de combustível:', txErr.message);
+    }
+
+    // 2. Persistir em fuel_logs com o vínculo transacao_id garantido
     const { error } = await supabase.from('fuel_logs').upsert({
       id: log.id,
       veiculo_id: log.veiculoId || 'veh-compass',
       usuario_id: log.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
       data: log.data.slice(0, 10),
       posto_nome: log.posto,
-      combustivel: log.combustivel,
+      combustivel: normalizeFuelType(log.combustivel),
       valor_total: log.valorTotal,
       preco_litro: log.precoLitro,
       litros: log.litros,
@@ -594,11 +666,12 @@ export async function addFuelLogToCloud(log: FuelLog): Promise<boolean> {
       km_rodados: log.kmRodados || 0,
       consumo_km_l: log.consumoKmPorLitro || 0,
       custo_por_km: log.custoPorKm || 0,
-      forma_pagamento: log.formaPagamento || 'Cartão conjunto Inter',
+      forma_pagamento: formaPgto,
       comprovante_url: log.comprovanteUrl || null,
-      transacao_id: log.transacaoId || null,
+      transacao_id: txId,
       observacoes: log.observacoes || null,
     }, { onConflict: 'id' });
+
     if (error) {
       console.warn('[SupabaseService] Erro ao persistir abastecimento:', error.message);
       return false;
@@ -613,12 +686,31 @@ export async function addFuelLogToCloud(log: FuelLog): Promise<boolean> {
 export async function updateFuelLogInCloud(log: FuelLog): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
+    const formaPgto = log.formaPagamento || 'Cartão conjunto Inter';
+    const isCredit = formaPgto.toLowerCase().includes('inter') ||
+                     formaPgto.toLowerCase().includes('credito') ||
+                     formaPgto.toLowerCase().includes('crédito');
+
+    // Se tiver transação vinculada, sincronizar também no extrato/transações
+    if (log.transacaoId) {
+      await supabase.from('transactions').update({
+        data: log.data.slice(0, 10),
+        mes_referencia: log.data.slice(0, 7),
+        valor: log.valorTotal,
+        forma_pagamento: formaPgto,
+        status: isCredit ? 'previsto' : 'pago',
+        estabelecimento_nome: log.posto,
+        usuario_id: log.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+        observacoes: log.observacoes || `Abastecimento em ${log.posto}`,
+      }).eq('id', log.transacaoId);
+    }
+
     const { error } = await supabase
       .from('fuel_logs')
       .update({
         data: log.data.slice(0, 10),
         posto_nome: log.posto,
-        combustivel: log.combustivel,
+        combustivel: normalizeFuelType(log.combustivel),
         valor_total: log.valorTotal,
         preco_litro: log.precoLitro,
         litros: log.litros,
@@ -626,7 +718,7 @@ export async function updateFuelLogInCloud(log: FuelLog): Promise<boolean> {
         km_rodados: log.kmRodados || 0,
         consumo_km_l: log.consumoKmPorLitro || 0,
         custo_por_km: log.custoPorKm || 0,
-        forma_pagamento: log.formaPagamento || 'Cartão conjunto Inter',
+        forma_pagamento: formaPgto,
         transacao_id: log.transacaoId || undefined,
         observacoes: log.observacoes || null,
       })
@@ -641,6 +733,10 @@ export async function updateFuelLogInCloud(log: FuelLog): Promise<boolean> {
 export async function deleteFuelLogFromCloud(id: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
+    const { data } = await supabase.from('fuel_logs').select('transacao_id').eq('id', id).single();
+    if (data?.transacao_id) {
+      await supabase.from('transactions').delete().eq('id', data.transacao_id);
+    }
     const { error } = await supabase.from('fuel_logs').delete().eq('id', id);
     return !error;
   } catch (err) {

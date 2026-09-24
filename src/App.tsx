@@ -241,17 +241,80 @@ export default function App() {
 
   // Handlers para Abastecimentos de Combustível (Compass)
   const handleAddFuelLog = async (log: FuelLog) => {
-    setFuelLogs((prev) => [...prev, log]);
-    await addFuelLogToCloud(log);
+    const txId = log.transacaoId || `tx-${log.id.replace('fuel-', '')}`;
+    const formaPgto = log.formaPagamento || 'Cartão conjunto Inter';
+    const isCredit = formaPgto.toLowerCase().includes('inter') ||
+                     formaPgto.toLowerCase().includes('credito') ||
+                     formaPgto.toLowerCase().includes('crédito');
+
+    const fuelTx: Transaction = {
+      id: txId,
+      data: log.data,
+      mesReferencia: log.data.substring(0, 7),
+      tipo: 'despesa',
+      categoria: 'Variável',
+      categoria_id: 'cat-variavel',
+      subcategoria: 'Combustível',
+      subcategoria_id: 'sub-combustivel',
+      estabelecimento: log.posto || 'Posto de Combustível',
+      valor: log.valorTotal,
+      formaPagamento: formaPgto,
+      status: isCredit ? 'pendente' : 'pago',
+      pagoPor: log.pagoPor || 'Felipe',
+      usuario_id: log.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+      kmAtual: log.kmAtual,
+      litros: log.litros,
+      combustivel: log.combustivel,
+      observacoes: log.observacoes || `Abastecimento em ${log.posto}`,
+    };
+
+    const syncedLog: FuelLog = {
+      ...log,
+      transacaoId: txId,
+    };
+
+    setFuelLogs((prev) => [...prev, syncedLog]);
+    setTransactions((prev) => {
+      const exists = prev.some((t) => t.id === txId);
+      if (exists) return prev.map((t) => (t.id === txId ? fuelTx : t));
+      return [fuelTx, ...prev];
+    });
+
+    await addFuelLogToCloud(syncedLog);
   };
 
   const handleUpdateFuelLog = async (log: FuelLog) => {
     setFuelLogs((prev) => prev.map((f) => (f.id === log.id ? log : f)));
+    if (log.transacaoId) {
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t.id === log.transacaoId
+            ? {
+                ...t,
+                data: log.data,
+                mesReferencia: log.data.substring(0, 7),
+                estabelecimento: log.posto,
+                valor: log.valorTotal,
+                formaPagamento: log.formaPagamento || t.formaPagamento,
+                pagoPor: log.pagoPor || t.pagoPor,
+                usuario_id: log.pagoPor === 'Genivânia' ? 'usr-genivania' : 'usr-felipe',
+                kmAtual: log.kmAtual,
+                litros: log.litros,
+                combustivel: log.combustivel,
+              }
+            : t
+        )
+      );
+    }
     await updateFuelLogInCloud(log);
   };
 
   const handleDeleteFuelLog = async (id: string) => {
+    const logToDelete = fuelLogs.find((f) => f.id === id);
     setFuelLogs((prev) => prev.filter((f) => f.id !== id));
+    if (logToDelete?.transacaoId) {
+      setTransactions((prev) => prev.filter((t) => t.id !== logToDelete.transacaoId));
+    }
     await deleteFuelLogFromCloud(id);
   };
 
@@ -438,16 +501,44 @@ export default function App() {
 
   const handleAddTransaction = (newTx: Transaction) => {
     setTransactions((prev) => [newTx, ...prev]);
+
+    // Se for combustível, sincronizar imediatamente na telemetria veicular
+    if (newTx.subcategoria === 'Combustível' || newTx.subcategoria_id === 'sub-combustivel') {
+      const fuelId = `fuel-${newTx.id.replace('tx-', '')}`;
+      const precoL = newTx.litros && newTx.valor ? Number((newTx.valor / newTx.litros).toFixed(2)) : 5.85;
+      const lit = newTx.litros || Number((newTx.valor / precoL).toFixed(2));
+      const fuelLog: FuelLog = {
+        id: fuelId,
+        data: newTx.data,
+        posto: newTx.estabelecimento || 'Posto de Combustível',
+        combustivel: newTx.combustivel || 'Gasolina Comum',
+        valorTotal: newTx.valor,
+        precoLitro: precoL,
+        litros: lit,
+        kmAtual: newTx.kmAtual || 0,
+        pagoPor: newTx.pagoPor === 'Genivânia' ? 'Genivânia' : 'Felipe',
+        formaPagamento: newTx.formaPagamento || 'Cartão conjunto Inter',
+        transacaoId: newTx.id,
+        origem: 'manual',
+        veiculoId: 'veh-compass',
+        observacoes: newTx.observacoes,
+      };
+      setFuelLogs((prev) => {
+        const exists = prev.some((f) => f.id === fuelId || f.transacaoId === newTx.id);
+        if (exists) return prev.map((f) => (f.id === fuelId || f.transacaoId === newTx.id ? fuelLog : f));
+        return [...prev, fuelLog];
+      });
+    }
   };
 
   const handleUpdateTransaction = async (updatedTx: Transaction) => {
     setTransactions((prev) =>
       prev.map((t) => (t.id === updatedTx.id ? updatedTx : t))
     );
-    if (updatedTx.subcategoria === 'Combustível') {
+    if (updatedTx.subcategoria === 'Combustível' || updatedTx.subcategoria_id === 'sub-combustivel') {
       setFuelLogs((prev) =>
         prev.map((f) =>
-          f.transacaoId === updatedTx.id || (updatedTx.comprovanteId && f.comprovanteId === updatedTx.comprovanteId)
+          f.transacaoId === updatedTx.id || (updatedTx.comprovanteId && f.comprovanteId === updatedTx.comprovanteId) || f.id === `fuel-${updatedTx.id.replace('tx-', '')}`
             ? {
                 ...f,
                 data: updatedTx.data,
@@ -464,8 +555,10 @@ export default function App() {
     await updateTransactionInCloud(updatedTx);
   };
 
-  const handleDeleteTransaction = (id: string) => {
+  const handleDeleteTransaction = async (id: string) => {
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setFuelLogs((prev) => prev.filter((f) => f.transacaoId !== id && f.id !== `fuel-${id.replace('tx-', '')}`));
+    await deleteTransactionFromCloud(id);
   };
 
   const handleAddGoal = async (goal: FinancialGoal) => {
