@@ -30,19 +30,24 @@ export const INITIAL_USERS: User[] = [
 
 export const CATEGORIES_CONFIG: CategoryBudget[] = [
   // Invariáveis
-  { nome: 'Aluguel', categoria: 'Invariável', orcamentoPadrao: 2800, icone: 'home' },
-  { nome: 'Condomínio', categoria: 'Invariável', orcamentoPadrao: 650, icone: 'building' },
-  { nome: 'Internet', categoria: 'Invariável', orcamentoPadrao: 130, icone: 'wifi' },
-  { nome: 'Rastreador', categoria: 'Invariável', orcamentoPadrao: 89.9, icone: 'shield', isCarro: true },
+  { nome: 'Aluguel', categoria: 'Invariável', orcamentoPadrao: 1020.58, icone: 'home' },
+  { nome: 'Condomínio', categoria: 'Invariável', orcamentoPadrao: 400.60, icone: 'building' },
+  { nome: 'Internet / TV', categoria: 'Invariável', orcamentoPadrao: 89.99, icone: 'wifi' },
+  { nome: 'Rastreador', categoria: 'Invariável', orcamentoPadrao: 59.90, icone: 'shield', isCarro: true },
   { nome: 'Seguro (Carro)', categoria: 'Invariável', orcamentoPadrao: 240, icone: 'car', isCarro: true },
-  { nome: 'Assinaturas Extras', categoria: 'Invariável', orcamentoPadrao: 110, icone: 'tv' },
+  { nome: 'Amazon Music', categoria: 'Invariável', orcamentoPadrao: 25.90, icone: 'tv' },
+  { nome: 'Youtube Premium', categoria: 'Invariável', orcamentoPadrao: 53.90, icone: 'tv' },
 
   // Variáveis
-  { nome: 'Supermercado', categoria: 'Variável', orcamentoPadrao: 2400, icone: 'shopping-cart' },
-  { nome: 'Combustível', categoria: 'Variável', orcamentoPadrao: 650, icone: 'fuel', isCarro: true },
-  { nome: 'Farmácia', categoria: 'Variável', orcamentoPadrao: 350, icone: 'pill' },
-  { nome: 'Lazer', categoria: 'Variável', orcamentoPadrao: 1200, icone: 'party-popper' },
+  { nome: 'Supermercado', categoria: 'Variável', orcamentoPadrao: 1200, icone: 'shopping-cart' },
+  { nome: 'Combustível', categoria: 'Variável', orcamentoPadrao: 600, icone: 'fuel', isCarro: true },
+  { nome: 'Farmácia', categoria: 'Variável', orcamentoPadrao: 300, icone: 'pill' },
+  { nome: 'Lazer', categoria: 'Variável', orcamentoPadrao: 400, icone: 'party-popper' },
   { nome: 'Estacionamento', categoria: 'Variável', orcamentoPadrao: 200, icone: 'square-parking', isCarro: true },
+  { nome: 'Luz', categoria: 'Variável', orcamentoPadrao: 220, icone: 'zap' },
+  { nome: 'Água', categoria: 'Variável', orcamentoPadrao: 85, icone: 'droplets' },
+  { nome: 'Gás', categoria: 'Variável', orcamentoPadrao: 70, icone: 'flame' },
+  { nome: 'Placa Solar', categoria: 'Variável', orcamentoPadrao: 477, icone: 'sun' },
 
   // Extra/Eventualidades
   { nome: 'Manutenção de carro', categoria: 'Extra/Eventualidades', orcamentoPadrao: 400, icone: 'wrench', isCarro: true },

@@ -135,8 +135,8 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
         tipo: t.tipo as any,
         categoria: t.categoria_id === 'cat-invariavel' ? 'Invariável' : t.categoria_id === 'cat-extra' ? 'Extra/Eventualidades' : 'Variável',
         categoria_id: t.categoria_id,
-        subcategoria: t.subcategoria_id.replace('sub-', '').replace(/-/g, ' '),
-        subcategoria_id: t.subcategoria_id,
+        subcategoria: SUBCATEGORIA_DISPLAY_MAP[(t.subcategoria_id || '')] || (t.subcategoria_id || '').replace('sub-', '').replace(/-/g, ' '),
+        subcategoria_id: t.subcategoria_id || '',
         estabelecimento: resolvedNome,
         estabelecimento_id: t.estabelecimento_id,
         formaPagamento: t.forma_pagamento,
@@ -317,6 +317,30 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
   }
 }
 
+// Mapa de IDs de subcategoria para nomes legíveis em português (com acentos)
+export const SUBCATEGORIA_DISPLAY_MAP: Record<string, string> = {
+  'sub-aluguel': 'Aluguel',
+  'sub-condominio': 'Condomínio',
+  'sub-internet': 'Internet / TV',
+  'sub-rastreador': 'Rastreador',
+  'sub-seguro': 'Seguro (Carro)',
+  'sub-amazon-music': 'Amazon Music',
+  'sub-youtube-premium': 'Youtube Premium',
+  'sub-agua': 'Água',
+  'sub-combustivel': 'Combustível',
+  'sub-gas': 'Gás',
+  'sub-lazer': 'Lazer',
+  'sub-luz': 'Luz',
+  'sub-placa-solar': 'Placa Solar',
+  'sub-supermercado': 'Supermercado',
+  'sub-eventualidades': 'Eventualidades',
+  'sub-manutencao-carro': 'Manutenção de carro',
+  'sub-ipva': 'IPVA',
+  'sub-farmacia': 'Farmácia',
+  'sub-estacionamento': 'Estacionamento',
+  'sub-uber': 'Uber / Transporte',
+};
+
 // Mapeamento automático de categorias e subcategorias para o Supabase
 export function mapCategoryToId(cat?: string): string {
   if (cat === 'Invariável') return 'cat-invariavel';
@@ -326,24 +350,32 @@ export function mapCategoryToId(cat?: string): string {
 
 export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string {
   const norm = (nomeSub || '').toLowerCase();
+  // Assinaturas e serviços fixos (Invariável)
   if (norm.includes('aluguel')) return 'sub-aluguel';
   if (norm.includes('condom')) return 'sub-condominio';
-  if (norm.includes('internet') || norm.includes('tv')) return 'sub-internet';
+  if (norm.includes('internet') || norm.includes('fibra') || norm.includes('internet / tv')) return 'sub-internet';
   if (norm.includes('rastreador')) return 'sub-rastreador';
   if (norm.includes('seguro')) return 'sub-seguro';
+  if (norm.includes('youtube') || norm.includes('yt premium') || norm.includes('youtube premium')) return 'sub-youtube-premium';
+  if (norm.includes('amazon music')) return 'sub-amazon-music';
+  // Variáveis
+  if (norm.includes('placa solar') || norm.includes('solar')) return 'sub-placa-solar';
   if (norm.includes('estacionamento') || norm.includes('estac') || norm.includes('pedagio') || norm.includes('pedágio')) return 'sub-estacionamento';
-  if (norm.includes('supermercado') || norm.includes('mercado') || norm.includes('comida') || norm.includes('frigor')) return 'sub-supermercado';
-  if (norm.includes('combust') || norm.includes('posto') || norm.includes('gasolina')) return 'sub-combustivel';
+  if (norm.includes('supermercado') || norm.includes('feira') || norm.includes('frigor')) return 'sub-supermercado';
+  if (norm.includes('combust') || norm.includes('gasolina') || norm.includes('etanol') || norm.includes('diesel')) return 'sub-combustivel';
   if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio') || norm.includes('exame')) return 'sub-farmacia';
-  if (norm.includes('lazer') || norm.includes('restaurante') || norm.includes('bar')) return 'sub-lazer';
-  if (norm.includes('luz') || norm.includes('energia')) return 'sub-luz';
+  if (norm.includes('lazer') || norm.includes('restaurante') || norm.includes('bar') || norm.includes('jantar')) return 'sub-lazer';
+  if (norm.includes('luz') || norm.includes('energia') || norm.includes('elétrica') || norm.includes('eletrica')) return 'sub-luz';
   if (norm.includes('agua') || norm.includes('água')) return 'sub-agua';
-  if (norm.includes('gás') || norm.includes('gas')) return 'sub-gas';
+  if (norm.includes('gás') || norm.includes('gas') || norm.includes('botijão') || norm.includes('botijao')) return 'sub-gas';
+  if (norm.includes('uber') || norm.includes('transporte app') || norm.includes('mobilidade')) return 'sub-uber';
+  // Extra/Eventualidades
   if (norm.includes('manuten') && norm.includes('carro')) return 'sub-manutencao-carro';
   if (norm.includes('ipva')) return 'sub-ipva';
-  if (norm.includes('uber')) return 'sub-uber';
+  if (norm.includes('eventualidade') || norm.includes('eventual')) return 'sub-eventualidades';
 
-  if (categoria === 'Invariável') return 'sub-aluguel';
+  // Fallbacks por categoria — CORRIGIDO: Invariável não cai mais em sub-aluguel
+  if (categoria === 'Invariável') return 'sub-internet'; // serviço/assinatura genérica
   if (categoria === 'Extra/Eventualidades') return 'sub-eventualidades';
   return 'sub-supermercado';
 }

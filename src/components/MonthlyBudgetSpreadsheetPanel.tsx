@@ -137,7 +137,7 @@ export const DEFAULT_BUDGET_ITEMS: BudgetItemConfig[] = [
       const subId = (t.subcategoria_id || '').toLowerCase();
       const s = (t.subcategoria || '').toLowerCase();
       const e = (t.estabelecimento || '').toLowerCase();
-      return subId === 'sub-youtube' || s.includes('youtube') || e.includes('youtube') || e.includes('google youtube');
+      return subId === 'sub-youtube-premium' || s.includes('youtube') || e.includes('youtube') || e.includes('google youtube');
     },
   },
 
@@ -303,7 +303,7 @@ export const DEFAULT_BUDGET_ITEMS: BudgetItemConfig[] = [
         e.includes('atacadão') ||
         e.includes('atacadao') ||
         e.includes('mercado') ||
-        e.includes('ifood') ||
+        e.includes('ifood') && !e.includes('club') ||
         e.includes('ferreira') ||
         e.includes('carvalho') ||
         e.includes('frigorífico') ||
@@ -699,9 +699,9 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     const compYear = parseInt(compYearStr, 10) || 2026;
     const compMonth = parseInt(compMonthStr, 10) || 9;
 
-    // Vencimento ocorre no MÊS SEGUINTE à competência (ex: despesas de Setembro vencem em Outubro)
-    const dueMonth = compMonth === 12 ? 1 : compMonth + 1;
-    const dueYear = compMonth === 12 ? compYear + 1 : compYear;
+    // Vencimento no mesmo mês da competência (revertido a pedido do usuário)
+    const dueMonth = compMonth;
+    const dueYear = compYear;
     const dueMonthStr = String(dueMonth).padStart(2, '0');
 
     const vencidas: Array<{ descricao: string; dia: number; mes: number; valor: number }> = [];

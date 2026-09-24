@@ -269,23 +269,19 @@ export default function App() {
     };
     const txDate = normalizeReceiptDate(receipt.data);
 
-    // Identificar o nome do mês da transação (ex: '2026-09' -> 'Setembro 2026')
-    const mesNomeMap: Record<string, string> = {
-      '01': 'Janeiro 2026',
-      '02': 'Fevereiro 2026',
-      '03': 'Março 2026',
-      '04': 'Abril 2026',
-      '05': 'Maio 2026',
-      '06': 'Junho 2026',
-      '07': 'Julho 2026',
-      '08': 'Agosto 2026',
-      '09': 'Setembro 2026',
-      '10': 'Outubro 2026',
-      '11': 'Novembro 2026',
-      '12': 'Dezembro 2026',
-    };
+    // Identificar o nome do mês da transação dinamicamente (ex: '2026-09' -> 'Setembro 2026')
     const parts = txDate.split('-');
-    const targetMes = (parts.length >= 2 && mesNomeMap[parts[1]]) ? mesNomeMap[parts[1]] : selectedMonth;
+    let targetMes = selectedMonth;
+    if (parts.length >= 2) {
+      const txYear = parseInt(parts[0], 10);
+      const txMonth = parseInt(parts[1], 10) - 1; // 0-indexed para Date
+      if (!isNaN(txYear) && !isNaN(txMonth)) {
+        const dateObj = new Date(txYear, txMonth, 1);
+        const mesNome = dateObj.toLocaleString('pt-BR', { month: 'long' });
+        targetMes = `${mesNome.charAt(0).toUpperCase()}${mesNome.slice(1)} ${txYear}`;
+      }
+    }
+
 
     // Atualiza automaticamente o mês ativo para o mês do comprovante para ficar visível imediatamente no extrato!
     setSelectedMonth(targetMes);

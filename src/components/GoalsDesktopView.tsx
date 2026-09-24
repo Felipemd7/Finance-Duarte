@@ -218,40 +218,51 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
     return filtered.reduce((acc, t) => acc + t.valor, 0);
   }, [monthTransactions]);
-  // Budget Categories State
+  // Budget Categories State — merge inteligente: preserva edições do usuário + adiciona novas categorias padrão
   const [categories, setCategories] = useState<BudgetCategoryItem[]>(() => {
     const saved = localStorage.getItem('duarte_desktop_categories');
+    let loadedCats: BudgetCategoryItem[] = DEFAULT_CATEGORIES;
+
     if (saved) {
       try {
         const parsed: BudgetCategoryItem[] = JSON.parse(saved);
-        // Higieniza qualquer resquício de saldo ou texto estático mockado e remove a categoria reserva
-        return parsed
-          .filter(
-            (c) =>
-              c.id !== 'reserva' &&
-              c.type !== 'saving' &&
-              !(c.name && c.name.toLowerCase().includes('reserva'))
-          )
-          .map((c) => ({
-            ...c,
-            spent: c.spent || 0,
-            alertPercent: c.alertPercent || 85,
-            note:
-              c.note &&
-              (c.note.includes('não essenciais') ||
-                c.note.includes('dias no ciclo') ||
-                c.note.includes('regular e controlado') ||
-                c.note.includes('imprevistos médicos') ||
-                c.note.includes('atingida!'))
-                ? ''
-                : c.note || '',
-          }));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Filtro de limpeza: remover categorias inválidas ou de "reserva" legadas
+          const cleaned = parsed
+            .filter(
+              (c) =>
+                c.id &&
+                c.id !== 'reserva' &&
+                c.type !== 'saving' &&
+                !(c.name && c.name.toLowerCase().includes('reserva'))
+            )
+            .map((c) => ({
+              ...c,
+              spent: c.spent || 0,
+              alertPercent: c.alertPercent || 85,
+              note:
+                c.note &&
+                (c.note.includes('não essenciais') ||
+                  c.note.includes('dias no ciclo') ||
+                  c.note.includes('regular e controlado') ||
+                  c.note.includes('imprevistos médicos') ||
+                  c.note.includes('atingida!'))
+                  ? ''
+                  : c.note || '',
+            }));
+
+          // Adiciona categorias padrão que o usuário ainda não tem (novas adições)
+          const existingIds = new Set(cleaned.map((c) => c.id));
+          const missingDefaults = DEFAULT_CATEGORIES.filter((d) => !existingIds.has(d.id));
+          loadedCats = [...cleaned, ...missingDefaults];
+        }
       } catch {
-        return DEFAULT_CATEGORIES;
+        loadedCats = DEFAULT_CATEGORIES;
       }
     }
-    return DEFAULT_CATEGORIES;
+    return loadedCats;
   });
+
 
   useEffect(() => {
     localStorage.setItem('duarte_desktop_categories', JSON.stringify(categories));
