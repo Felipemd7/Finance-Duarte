@@ -12,7 +12,9 @@ Este documento serve como diretriz e memória de contexto para o projeto de fina
 
 ## 💳 Formas de Pagamento & Status
 1. **Formas de Pagamento:**
-   - Opção padrão e principal: **`Cartão conjunto Inter`**.
+   - Opção padrão e principal: **`Cartão conjunto Inter`** (rótulo "Crédito", status `pendente` até o fechamento da fatura).
+   - **`Cartão conjunto Inter - Débito`**: pago à vista (status `pago`, desembolso imediato no rateio 50/50). Débito nunca é tratado como crédito (`isCreditCardPayment`).
+   - Planilha de fechamento (`MonthlyBudgetSpreadsheetPanel.tsx`): expectativas, situações e vencimentos são salvos **por mês** (`duarte_*_YYYY-MM`) e recarregados ao trocar de mês, sem contaminar outros meses.
    - Outras formas válidas: `PIX Inter`, `Cartão de Crédito NuBank`, `PIX NuBank`, `Débito em Conta`, `Dinheiro`, `Boleto Bancário`.
 2. **Status da Transação:**
    - Suporta: `pago`, `previsto`, `pendente`.

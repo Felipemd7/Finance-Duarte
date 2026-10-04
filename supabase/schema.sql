@@ -219,6 +219,16 @@ CREATE TABLE IF NOT EXISTS public.monthly_expectations (
 
 CREATE INDEX IF NOT EXISTS idx_monthly_exp_mes ON public.monthly_expectations(mes_ano);
 
+-- Configurações mensais da planilha de fechamento (expectativas, situações, vencimentos)
+CREATE TABLE IF NOT EXISTS public.monthly_sheet_config (
+    mes_ano VARCHAR(7) PRIMARY KEY,
+    expectativas JSONB NOT NULL DEFAULT '{}'::jsonb,
+    situacoes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    vencimentos JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.monthly_sheet_config ENABLE ROW LEVEL SECURITY;
+
 -- =====================================================================
 -- 14. ROW LEVEL SECURITY (RLS)
 -- =====================================================================

@@ -27,6 +27,11 @@ import {
 } from 'lucide-react';
 import { Transaction, SpreadsheetRow } from '../types';
 import { formatBRL } from '../utils/formatters';
+import {
+  getMonthSheetConfig,
+  saveMonthSheetConfig,
+  subscribeSheetConfig,
+} from '../services/monthlySheetConfig';
 
 interface MonthlyBudgetSpreadsheetPanelProps {
   transactions: Transaction[];
@@ -333,11 +338,7 @@ export function getMonthlyExpectedBudget(monthCode: string): number {
     return Math.round(base * 12 * 100) / 100;
   }
 
-  let custom: Record<string, number> = {};
-  try {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(`duarte_expectativas_${monthCode}`) : null;
-    if (saved) custom = JSON.parse(saved);
-  } catch {}
+  const custom: Record<string, number> = getMonthSheetConfig(monthCode).expectativas;
 
   const regularSum = DEFAULT_BUDGET_ITEMS.filter((i) => i.categoria !== 'Extra').reduce((acc, item) => {
     const exp = custom[item.descricao] !== undefined ? custom[item.descricao] : item.expectativaPadrao;
@@ -366,6 +367,8 @@ const MONTHS_LIST = [
 // Identifica se uma forma de pagamento é cartão de crédito
 export const isCreditCardPayment = (forma?: string, obs?: string): boolean => {
   const str = `${forma || ''} ${obs || ''}`.toLowerCase();
+  // Débito (inclusive 'Cartão conjunto Inter - Débito') nunca é crédito
+  if (str.includes('debito') || str.includes('débito')) return false;
   if (str.includes('credito') || str.includes('crédito')) return true;
   if (str.includes('cartao') && !str.includes('debito') && !str.includes('débito')) return true;
   if (str.includes('fatura') || str.includes('nubank') || str.includes('inter')) return true;
@@ -422,39 +425,56 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     return found ? found.name : selectedMonth;
   }, [activeMonthCode, selectedMonth]);
 
-  // Estados locais para expectativas editáveis e status de pagamento manual
-  const [customExpectativas, setCustomExpectativas] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem(`duarte_expectativas_${activeMonthCode}`);
-    return saved ? JSON.parse(saved) : {};
-  });
+  // Estados para expectativas editáveis e status de pagamento manual (persistidos no Supabase por mês)
+  const [customExpectativas, setExpState] = useState<Record<string, number>>(
+    () => getMonthSheetConfig(activeMonthCode).expectativas
+  );
+  const [customSituacoes, setSitState] = useState<Record<string, 'Paga' | 'Pendente'>>(
+    () => getMonthSheetConfig(activeMonthCode).situacoes
+  );
+  const [customVencimentos, setVencState] = useState<Record<string, number>>(
+    () => getMonthSheetConfig(activeMonthCode).vencimentos
+  );
 
-  const [customSituacoes, setCustomSituacoes] = useState<Record<string, 'Paga' | 'Pendente'>>(() => {
-    const saved = localStorage.getItem(`duarte_situacoes_${activeMonthCode}`);
-    return saved ? JSON.parse(saved) : {};
-  });
+  // Recarrega do cache ao trocar de mês e quando o Supabase terminar de carregar
+  useEffect(() => {
+    const sync = () => {
+      const cfg = getMonthSheetConfig(activeMonthCode);
+      setExpState((p) => (JSON.stringify(p) === JSON.stringify(cfg.expectativas) ? p : cfg.expectativas));
+      setSitState((p) => (JSON.stringify(p) === JSON.stringify(cfg.situacoes) ? p : cfg.situacoes));
+      setVencState((p) => (JSON.stringify(p) === JSON.stringify(cfg.vencimentos) ? p : cfg.vencimentos));
+    };
+    sync();
+    return subscribeSheetConfig(sync);
+  }, [activeMonthCode]);
 
-  const [customVencimentos, setCustomVencimentos] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('duarte_vencimentos_config');
-    return saved ? JSON.parse(saved) : {};
-  });
+  // Setters que gravam no Supabase apenas quando o usuário altera (nunca sobrescrevem outro mês)
+  const setCustomExpectativas = (v: Record<string, number> | ((p: Record<string, number>) => Record<string, number>)) => {
+    const next = typeof v === 'function' ? v(customExpectativas) : v;
+    setExpState(next);
+    saveMonthSheetConfig(activeMonthCode, { expectativas: next });
+  };
+  const setCustomSituacoes = (
+    v:
+      | Record<string, 'Paga' | 'Pendente'>
+      | ((p: Record<string, 'Paga' | 'Pendente'>) => Record<string, 'Paga' | 'Pendente'>)
+  ) => {
+    const next = typeof v === 'function' ? v(customSituacoes) : v;
+    setSitState(next);
+    saveMonthSheetConfig(activeMonthCode, { situacoes: next });
+  };
+  const setCustomVencimentos = (v: Record<string, number> | ((p: Record<string, number>) => Record<string, number>)) => {
+    const next = typeof v === 'function' ? v(customVencimentos) : v;
+    setVencState(next);
+    saveMonthSheetConfig(activeMonthCode, { vencimentos: next });
+  };
 
   const [editingItemDesc, setEditingItemDesc] = useState<string | null>(null);
   const [tempExpectativa, setTempExpectativa] = useState<string>('');
   const [expandedItemDesc, setExpandedItemDesc] = useState<string | null>(null);
   const [showVencimentoConfig, setShowVencimentoConfig] = useState(false);
 
-  // Salvar no localStorage quando houver alteração de status ou expectativa
-  useEffect(() => {
-    localStorage.setItem(`duarte_expectativas_${activeMonthCode}`, JSON.stringify(customExpectativas));
-  }, [customExpectativas, activeMonthCode]);
 
-  useEffect(() => {
-    localStorage.setItem(`duarte_situacoes_${activeMonthCode}`, JSON.stringify(customSituacoes));
-  }, [customSituacoes, activeMonthCode]);
-
-  useEffect(() => {
-    localStorage.setItem('duarte_vencimentos_config', JSON.stringify(customVencimentos));
-  }, [customVencimentos]);
 
   // 2. Filtro Estrito: Apenas despesas que pertencem EXATAMENTE a este mês
   const monthExpenses = useMemo(() => {
@@ -582,7 +602,7 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     }
 
     return rows;
-  }, [monthExpenses, customExpectativas, customSituacoes, customVencimentos]);
+  }, [monthExpenses, customExpectativas, customSituacoes, customVencimentos, activeMonthCode]);
 
   // 4. Totalizadores Gerais
   const totals = useMemo(() => {
@@ -640,7 +660,12 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
           cartaoConjunto += val;
         }
       } else {
-        if (pag.includes('felipe') || usr === 'usr-felipe') {
+        const formaLower = (t.formaPagamento || '').toLowerCase();
+        const isDebitoConjunto = formaLower.includes('inter') && /d[eé]bito/.test(formaLower);
+        if (isDebitoConjunto) {
+          // Débito do cartão conjunto: sai da conta conjunta, não de quem lançou
+          pagoConjuntaVista += val;
+        } else if (pag.includes('felipe') || usr === 'usr-felipe') {
           pagoFelipeVista += val;
         } else if (pag.includes('genivânia') || pag.includes('genivania') || usr === 'usr-genivania') {
           pagoGenivaniaVista += val;

@@ -627,9 +627,10 @@ export async function addFuelLogToCloud(log: FuelLog): Promise<boolean> {
   try {
     const txId = log.transacaoId || `tx-${log.id.replace('fuel-', '')}`;
     const formaPgto = log.formaPagamento || 'Cartão conjunto Inter';
-    const isCredit = formaPgto.toLowerCase().includes('inter') ||
-                     formaPgto.toLowerCase().includes('credito') ||
-                     formaPgto.toLowerCase().includes('crédito');
+    const isCredit = !/d[eé]bito/.test(formaPgto.toLowerCase()) &&
+                     (formaPgto.toLowerCase().includes('inter') ||
+                      formaPgto.toLowerCase().includes('credito') ||
+                      formaPgto.toLowerCase().includes('crédito'));
 
     // 1. Garante que exista a transação financeira vinculada no Extrato e Fechamento
     const { error: txErr } = await supabase.from('transactions').upsert({
@@ -687,9 +688,10 @@ export async function updateFuelLogInCloud(log: FuelLog): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
     const formaPgto = log.formaPagamento || 'Cartão conjunto Inter';
-    const isCredit = formaPgto.toLowerCase().includes('inter') ||
-                     formaPgto.toLowerCase().includes('credito') ||
-                     formaPgto.toLowerCase().includes('crédito');
+    const isCredit = !/d[eé]bito/.test(formaPgto.toLowerCase()) &&
+                     (formaPgto.toLowerCase().includes('inter') ||
+                      formaPgto.toLowerCase().includes('credito') ||
+                      formaPgto.toLowerCase().includes('crédito'));
 
     // Se tiver transação vinculada, sincronizar também no extrato/transações
     if (log.transacaoId) {

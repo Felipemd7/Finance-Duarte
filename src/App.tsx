@@ -19,6 +19,7 @@ import {
   INITIAL_FUEL_LOGS,
 } from './data/initialData';
 import { Transaction, Receipt, FinancialGoal, SpreadsheetRow, User, FuelLog } from './types';
+import { loadAllMonthlySheetConfigs, subscribeSheetConfig } from './services/monthlySheetConfig';
 import {
   fetchSupabaseData,
   addFuelLogToCloud,
@@ -123,6 +124,14 @@ export default function App() {
 
   // Modals
   const [isNewTxModalOpen, setIsNewTxModalOpen] = useState(false);
+
+  // Configurações mensais da planilha (Supabase): força re-render do Dashboard quando carregadas/alteradas
+  const [, setSheetConfigVersion] = useState(0);
+  useEffect(() => {
+    const unsub = subscribeSheetConfig(() => setSheetConfigVersion((v) => v + 1));
+    loadAllMonthlySheetConfigs();
+    return unsub;
+  }, []);
 
   // Sync with Supabase on Mount
   useEffect(() => {
@@ -243,9 +252,10 @@ export default function App() {
   const handleAddFuelLog = async (log: FuelLog) => {
     const txId = log.transacaoId || `tx-${log.id.replace('fuel-', '')}`;
     const formaPgto = log.formaPagamento || 'Cartão conjunto Inter';
-    const isCredit = formaPgto.toLowerCase().includes('inter') ||
-                     formaPgto.toLowerCase().includes('credito') ||
-                     formaPgto.toLowerCase().includes('crédito');
+    const isCredit = !/d[eé]bito/.test(formaPgto.toLowerCase()) &&
+                     (formaPgto.toLowerCase().includes('inter') ||
+                      formaPgto.toLowerCase().includes('credito') ||
+                      formaPgto.toLowerCase().includes('crédito'));
 
     const fuelTx: Transaction = {
       id: txId,

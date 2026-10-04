@@ -121,10 +121,11 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
 
     const formaLower = formaPagamento.toLowerCase();
     const isCredit =
-      formaLower.includes('inter') ||
-      formaLower.includes('credito') ||
-      formaLower.includes('crédito') ||
-      (formaLower.includes('cartao') && !formaLower.includes('debito'));
+      !/d[eé]bito/.test(formaLower) &&
+      (formaLower.includes('inter') ||
+        formaLower.includes('credito') ||
+        formaLower.includes('crédito') ||
+        formaLower.includes('cartao'));
 
     const catId = mapCategoryToId(categoria);
     const subcatId = mapSubcategoryToId(subcategoria, categoria);
@@ -432,18 +433,20 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               onChange={(e) => setFormaPagamento(e.target.value)}
               className="w-full mt-1 px-3 py-2 text-xs bg-[#f8f9ff] border border-[#cbd5e1] rounded-xl font-medium"
             >
-              <option value="Cartão conjunto Inter">Cartão conjunto Inter (Crédito - Pendente)</option>
+              <option value="Cartão conjunto Inter">Cartão conjunto Inter - Crédito (Pendente)</option>
+              <option value="Cartão conjunto Inter - Débito">Cartão conjunto Inter - Débito (Pago à vista)</option>
               <option value="PIX">PIX</option>
               <option value="Débito em Conta">Débito em Conta</option>
               <option value="Boleto Bancário">Boleto Bancário</option>
               <option value="Dinheiro">Dinheiro Físico</option>
             </select>
             <div className="mt-1.5">
-              {formaPagamento.toLowerCase().includes('inter') ||
-              formaPagamento.toLowerCase().includes('credito') ||
-              formaPagamento.toLowerCase().includes('crédito') ||
-              (formaPagamento.toLowerCase().includes('cartao') &&
-                !formaPagamento.toLowerCase().includes('debito')) ? (
+              {!formaPagamento.toLowerCase().includes('débito') &&
+              !formaPagamento.toLowerCase().includes('debito') &&
+              (formaPagamento.toLowerCase().includes('inter') ||
+                formaPagamento.toLowerCase().includes('credito') ||
+                formaPagamento.toLowerCase().includes('crédito') ||
+                formaPagamento.toLowerCase().includes('cartao')) ? (
                 <div className="text-[10px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
                   💳 <strong>Cartão conjunto Inter:</strong> Classificado como <strong>Pendente</strong>. Não entra como desembolso imediato de quem passou o cartão; será quitado no fechamento futuro da fatura conjunta do casal.
                 </div>
