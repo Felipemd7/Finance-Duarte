@@ -142,7 +142,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
         estabelecimento_id: t.estabelecimento_id,
         formaPagamento: t.forma_pagamento,
         status: (t.status === 'previsto' ? 'pendente' : (t.status || 'pago')) as any,
-        pagoPor: isConjointDebitPayment(t.forma_pagamento) ? 'Casal' : (t.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia'),
+        pagoPor: isConjointDebitPayment(t.forma_pagamento, t.observacoes) ? 'Casal' : (t.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia'),
         observacoes: t.observacoes || '',
         comprovanteId: t.comprovante_id,
         itens: itemsByTxId[t.id] || [],
@@ -585,6 +585,34 @@ export async function updateTransactionInCloud(tx: Transaction): Promise<{ succe
     return { success: false, error: err?.message || 'Erro inesperado' };
   }
 }
+
+/**
+ * Atualiza o status de múltiplas transações em lote no Supabase
+ * Útil para sincronização instantânea quando uma conta é marcada como Paga/Pendente na Planilha
+ */
+export async function updateTransactionsBatchStatusInCloud(
+  txIds: string[],
+  status: 'pago' | 'pendente' | 'previsto'
+): Promise<boolean> {
+  if (!isSupabaseConfigured || txIds.length === 0) return false;
+  try {
+    const dbStatus = status === 'pendente' ? 'previsto' : status;
+    const { error } = await supabase
+      .from('transactions')
+      .update({ status: dbStatus })
+      .in('id', txIds);
+
+    if (error) {
+      console.error('[SupabaseService] Erro ao atualizar status em lote:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SupabaseService] Exceção ao atualizar status em lote:', err);
+    return false;
+  }
+}
+
 
 export async function fetchShoppingListFromCloud(): Promise<ShoppingListItem[]> {
   if (!isSupabaseConfigured) return [];

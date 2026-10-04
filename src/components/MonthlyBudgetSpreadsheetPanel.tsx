@@ -32,6 +32,7 @@ import {
   saveMonthSheetConfig,
   subscribeSheetConfig,
 } from '../services/monthlySheetConfig';
+import { isCasalPayer } from '../utils/payer';
 
 interface MonthlyBudgetSpreadsheetPanelProps {
   transactions: Transaction[];
@@ -40,6 +41,7 @@ interface MonthlyBudgetSpreadsheetPanelProps {
   spreadsheets?: SpreadsheetRow[];
   onUpdateSpreadsheetRow?: (row: SpreadsheetRow) => void;
   onOpenNewTx?: () => void;
+  onUpdateTransactionStatus?: (txIds: string[], status: 'pago' | 'pendente') => void;
 }
 
 // Configuração padrão dos itens da planilha oficial do Casal Duarte
@@ -392,6 +394,7 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
   spreadsheets = [],
   onUpdateSpreadsheetRow,
   onOpenNewTx,
+  onUpdateTransactionStatus,
 }) => {
   // 1. Identificar o código YYYY-MM do mês
   const activeMonthCode = useMemo(() => {
@@ -604,6 +607,27 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     return rows;
   }, [monthExpenses, customExpectativas, customSituacoes, customVencimentos, activeMonthCode]);
 
+  // Efeito de conciliação automática: Se uma conta está marcada como 'Paga' na planilha
+  // (seja por histórico consolidado ou marcação manual), garante que as transações vinculadas sejam atualizadas para 'pago'
+  useEffect(() => {
+    if (!onUpdateTransactionStatus) return;
+    const txIdsToMarkPaid: string[] = [];
+
+    calculatedRows.forEach((row) => {
+      if (row.situacao === 'Paga') {
+        row.matchingTxs.forEach((t) => {
+          if (t.status === 'pendente' || t.status === 'previsto') {
+            txIdsToMarkPaid.push(t.id);
+          }
+        });
+      }
+    });
+
+    if (txIdsToMarkPaid.length > 0) {
+      onUpdateTransactionStatus(txIdsToMarkPaid, 'pago');
+    }
+  }, [calculatedRows, onUpdateTransactionStatus]);
+
   // 4. Totalizadores Gerais
   const totals = useMemo(() => {
     const regularRows = calculatedRows.filter((r) => r.categoria !== 'Extra');
@@ -660,10 +684,9 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
           cartaoConjunto += val;
         }
       } else {
-        const formaLower = (t.formaPagamento || '').toLowerCase();
-        const isDebitoConjunto = formaLower.includes('inter') && /d[eé]bito/.test(formaLower);
-        if (isDebitoConjunto) {
-          // Débito do cartão conjunto: sai da conta conjunta, não de quem lançou
+        const isCasal = isCasalPayer(t);
+        if (isCasal) {
+          // Débito do cartão conjunto: desembolso conjunto da conta do casal
           pagoConjuntaVista += val;
         } else if (pag.includes('felipe') || usr === 'usr-felipe') {
           pagoFelipeVista += val;
@@ -775,10 +798,20 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     };
   }, [calculatedRows, activeMonthCode]);
 
-  // Alternar situação manualmente
+  // Alternar situação manualmente (e sincronizar transações vinculadas)
   const handleToggleSituacao = (descricao: string, atual: 'Paga' | 'Pendente') => {
     const nova = atual === 'Paga' ? 'Pendente' : 'Paga';
     setCustomSituacoes((prev) => ({ ...prev, [descricao]: nova }));
+
+    // Sincronizar em lote o status das transações financeiras vinculadas a esta conta
+    if (onUpdateTransactionStatus) {
+      const targetRow = calculatedRows.find((r) => r.descricao === descricao);
+      if (targetRow && targetRow.matchingTxs.length > 0) {
+        const txIds = targetRow.matchingTxs.map((t) => t.id);
+        const targetStatus: 'pago' | 'pendente' = nova === 'Paga' ? 'pago' : 'pendente';
+        onUpdateTransactionStatus(txIds, targetStatus);
+      }
+    }
   };
 
   const handleSaveExpectativa = (descricao: string) => {
@@ -1381,9 +1414,17 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
               )}
             </div>
 
-            <div className="mt-3 pt-2 border-t border-white/10 text-[11px] text-white/70 flex items-center justify-between">
-              <span>Total À Vista:</span>
-              <strong className="font-mono text-white">{formatBRL(splitCalculations.totalDesembolsadoVista)}</strong>
+            <div className="mt-3 pt-2 border-t border-white/10 text-[11px] text-white/70 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span>Total À Vista:</span>
+                <strong className="font-mono text-white">{formatBRL(splitCalculations.totalDesembolsadoVista)}</strong>
+              </div>
+              {splitCalculations.pagoConjuntaVista > 0 && (
+                <div className="flex items-center justify-between text-white/60 text-[10px]">
+                  <span>(Conta Conjunta Casal):</span>
+                  <span className="font-mono text-violet-300 font-semibold">{formatBRL(splitCalculations.pagoConjuntaVista)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

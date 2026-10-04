@@ -32,6 +32,8 @@ import {
   updateGoalInCloud,
   deleteGoalFromCloud,
   updateTransactionInCloud,
+  deleteTransactionFromCloud,
+  updateTransactionsBatchStatusInCloud,
 } from './services/supabaseService';
 import { getCurrentMonthName } from './utils/formatters';
 
@@ -571,6 +573,15 @@ export default function App() {
     await deleteTransactionFromCloud(id);
   };
 
+  const handleUpdateTransactionStatusBatch = async (txIds: string[], status: 'pago' | 'pendente') => {
+    if (txIds.length === 0) return;
+    setTransactions((prev) =>
+      prev.map((t) => (txIds.includes(t.id) ? { ...t, status } : t))
+    );
+    await updateTransactionsBatchStatusInCloud(txIds, status);
+  };
+
+
   const handleAddGoal = async (goal: FinancialGoal) => {
     setGoals((prev) => [goal, ...prev]);
     await saveGoalToCloud(goal);
@@ -660,6 +671,7 @@ export default function App() {
             onUpdateTransaction={handleUpdateTransaction}
             onDeleteTransaction={handleDeleteTransaction}
             onViewReceipt={handleViewReceipt}
+            onUpdateTransactionStatus={handleUpdateTransactionStatusBatch}
           />
         )}
 

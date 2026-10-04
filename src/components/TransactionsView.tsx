@@ -52,6 +52,7 @@ interface TransactionsViewProps {
   onUpdateTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
   onViewReceipt: (receipt: Receipt) => void;
+  onUpdateTransactionStatus?: (txIds: string[], status: 'pago' | 'pendente') => void;
 }
 
 export const TransactionsView: React.FC<TransactionsViewProps> = ({
@@ -64,6 +65,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onUpdateTransaction,
   onDeleteTransaction,
   onViewReceipt,
+  onUpdateTransactionStatus,
 }) => {
   // Navigation View Tab: 'extrato' (lista tradicional) ou 'planilha' (espelho da planilha e rateio 50/50)
   const [viewTab, setViewTab] = useState<'extrato' | 'planilha'>('extrato');
@@ -507,6 +509,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           onSelectMonth={onSelectMonth}
           spreadsheets={spreadsheets}
           onOpenNewTx={onOpenNewTx}
+          onUpdateTransactionStatus={onUpdateTransactionStatus}
         />
       ) : (
         <>

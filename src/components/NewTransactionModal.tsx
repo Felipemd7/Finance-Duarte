@@ -146,7 +146,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
         estabelecimento: estabelecimento.trim() || 'Estabelecimento Diverso',
         valor: numVal,
         formaPagamento,
-        status: isCredit ? 'pendente' : status,
+        status,
         pagoPor: isConjointDebitPayment(formaPagamento) ? 'Casal' : responsavel,
         observacoes: observacoes.trim() || undefined,
         kmAtual: parsedKm,
