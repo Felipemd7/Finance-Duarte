@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { Transaction, Receipt, SpreadsheetRow } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { isCasalPayer } from '../utils/payer';
 import { deleteTransactionFromCloud } from '../services/supabaseService';
 import { MonthlyBudgetSpreadsheetPanel } from './MonthlyBudgetSpreadsheetPanel';
 import { NewTransactionModal } from './NewTransactionModal';
@@ -394,11 +395,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     const categoryList = Object.values(categoryMap).sort((a, b) => b.valor - a.valor);
     const topCategory = categoryList[0] || null;
 
-    const felipeGasto = expenses
-      .filter((t) => t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe')
+    const casalMetade = expenses
+      .filter((t) => isCasalPayer(t))
+      .reduce((acc, t) => acc + (Number(t.valor) || 0), 0) / 2;
+    const felipeGasto = casalMetade + expenses
+      .filter((t) => !isCasalPayer(t) && (t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe'))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
-    const genivaniaGasto = expenses
-      .filter((t) => t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia')
+    const genivaniaGasto = casalMetade + expenses
+      .filter((t) => !isCasalPayer(t) && (t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia'))
       .reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
     const felipePct = totalGasto > 0 ? Math.round((felipeGasto / totalGasto) * 100) : 50;
     const genivaniaPct = 100 - felipePct;
@@ -691,7 +695,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                 {paginatedList.map((tx) => {
                   const meta = getCategoryMeta(tx.subcategoria, tx.categoria);
                   const IconComp = meta.icon;
-                  const isFelipe = tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe';
+                  const isCasal = isCasalPayer(tx);
+                  const isFelipe = !isCasal && (tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe');
 
                   return (
                     <div
@@ -708,8 +713,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                             {tx.estabelecimento || 'Lançamento Diverso'}
                           </span>
                           <span className="text-[10px] text-[#565e74] flex items-center gap-1 mt-0.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`} />
-                            {isFelipe ? 'Felipe' : 'Genivânia'} • {tx.data}
+                            <span className={`w-1.5 h-1.5 rounded-full ${isCasal ? 'bg-[#7c3aed]' : isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`} />
+                            {isCasal ? 'Casal' : isFelipe ? 'Felipe' : 'Genivânia'} • {tx.data}
                           </span>
                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                             {tx.status === 'pendente' || tx.status === 'previsto' ? (
@@ -1187,7 +1192,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                   const meta = getCategoryMeta(tx.subcategoria, tx.categoria);
                   const IconComp = meta.icon;
                   const isExpense = tx.tipo === 'despesa';
-                  const isFelipe = tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe';
+                  const isCasal = isCasalPayer(tx);
+                  const isFelipe = !isCasal && (tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe');
 
                   return (
                     <tr
@@ -1243,13 +1249,13 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                            isFelipe ? 'bg-[#eff6ff] text-[#1d4ed8]' : 'bg-[#fdf2f8] text-[#db2777]'
+                            isCasal ? 'bg-[#f5f3ff] text-[#6d28d9]' : isFelipe ? 'bg-[#eff6ff] text-[#1d4ed8]' : 'bg-[#fdf2f8] text-[#db2777]'
                           }`}
                         >
                           <span
-                            className={`w-2 h-2 rounded-full ${isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`}
+                            className={`w-2 h-2 rounded-full ${isCasal ? 'bg-[#7c3aed]' : isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`}
                           />
-                          <span>{isFelipe ? 'Felipe' : 'Genivânia'}</span>
+                          <span>{isCasal ? 'Casal' : isFelipe ? 'Felipe' : 'Genivânia'}</span>
                         </span>
                       </td>
 
@@ -1391,7 +1397,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               <div className="flex justify-between py-1 border-b border-[#f8f9ff]">
                 <span className="text-[#565e74]">Responsável:</span>
                 <span className="font-bold text-[#0b1c30]">
-                  {selectedTransactionDetail.usuario_id === 'usr-felipe' || selectedTransactionDetail.pagoPor === 'Felipe'
+                  {isCasalPayer(selectedTransactionDetail)
+                    ? 'Casal Duarte (conta conjunta)'
+                    : selectedTransactionDetail.usuario_id === 'usr-felipe' || selectedTransactionDetail.pagoPor === 'Felipe'
                     ? 'Felipe Duarte'
                     : 'Genivânia Duarte'}
                 </span>

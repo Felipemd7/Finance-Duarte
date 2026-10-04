@@ -15,6 +15,7 @@ import {
   Fuel,
 } from 'lucide-react';
 import { Transaction, CategoryType } from '../types';
+import { isConjointDebitPayment } from '../utils/payer';
 import {
   addTransactionToCloud,
   updateTransactionInCloud,
@@ -146,7 +147,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
         valor: numVal,
         formaPagamento,
         status: isCredit ? 'pendente' : status,
-        pagoPor: responsavel,
+        pagoPor: isConjointDebitPayment(formaPagamento) ? 'Casal' : responsavel,
         observacoes: observacoes.trim() || undefined,
         kmAtual: parsedKm,
         litros: parsedLitros,
@@ -186,7 +187,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
         valor: numVal,
         formaPagamento,
         status: isCredit ? 'pendente' : status,
-        pagoPor: responsavel,
+        pagoPor: isConjointDebitPayment(formaPagamento) ? 'Casal' : responsavel,
         observacoes: observacoes.trim() || undefined,
         kmAtual: parsedKm,
         litros: parsedLitros,
@@ -452,7 +453,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 </div>
               ) : (
                 <div className="text-[10px] text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
-                  ✅ <strong>À Vista ({formaPagamento}):</strong> Classificado como <strong>Pago</strong>. Entra como desembolso imediato de <strong>{responsavel}</strong> para o rateio 50/50.
+                  ✅ <strong>À Vista ({formaPagamento}):</strong> Classificado como <strong>Pago</strong>. Entra como desembolso imediato de <strong>{isConjointDebitPayment(formaPagamento) ? 'Casal Duarte (conta conjunta)' : responsavel}</strong> para o rateio 50/50.
                 </div>
               )}
             </div>
@@ -502,6 +503,14 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
               <Users className="w-3.5 h-3.5 text-[#006948]" />
               Quem realizou o pagamento?
             </label>
+            {isConjointDebitPayment(formaPagamento) ? (
+              <div className="py-2.5 px-3 rounded-xl text-xs font-bold bg-[#f5f3ff] text-[#6d28d9] border border-[#ddd6fe] flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#7c3aed] text-white flex items-center justify-center text-[10px]">
+                  C
+                </span>
+                Casal Duarte (conta conjunta)
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -534,6 +543,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 Genivânia Duarte
               </button>
             </div>
+            )}
             <p className="text-[10px] text-[#565e74] mt-1.5">
               Despesa integrada ao orçamento conjunto 50/50 do casal.
             </p>

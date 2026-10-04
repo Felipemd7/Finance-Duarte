@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { Transaction, FinancialGoal, SpreadsheetRow } from '../types';
 import { formatBRL } from '../utils/formatters';
+import { isCasalPayer } from '../utils/payer';
 import { getMonthlyExpectedBudget } from './MonthlyBudgetSpreadsheetPanel';
 
 interface DashboardViewProps {
@@ -148,12 +149,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const saldoOrcamento = expectativaPrevista - totalGastos;
 
     // Couple Share calculation
-    const felipeGasto = expenses
-      .filter((t) => t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe')
+    const casalMetade = expenses
+      .filter((t) => isCasalPayer(t))
+      .reduce((acc, t) => acc + t.valor, 0) / 2;
+
+    const felipeGasto = casalMetade + expenses
+      .filter((t) => !isCasalPayer(t) && (t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe'))
       .reduce((acc, t) => acc + t.valor, 0);
 
-    const genivaniaGasto = expenses
-      .filter((t) => t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia')
+    const genivaniaGasto = casalMetade + expenses
+      .filter((t) => !isCasalPayer(t) && (t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia'))
       .reduce((acc, t) => acc + t.valor, 0);
 
     const totalParitario = (felipeGasto + genivaniaGasto) || 1;
@@ -196,9 +201,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const recentTransactions = useMemo(() => {
     let list = [...relevantTransactions].filter((t) => t.tipo === 'despesa');
     if (filterPerson === 'felipe') {
-      list = list.filter((t) => t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe');
+      list = list.filter((t) => !isCasalPayer(t) && (t.usuario_id === 'usr-felipe' || t.pagoPor === 'Felipe'));
     } else if (filterPerson === 'genivania') {
-      list = list.filter((t) => t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia');
+      list = list.filter((t) => !isCasalPayer(t) && (t.usuario_id === 'usr-genivania' || t.pagoPor === 'Genivânia'));
     }
     return list
       .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
@@ -784,7 +789,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex flex-col gap-2">
             {recentTransactions.slice(0, 4).map((tx) => {
-              const isFelipe = tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe';
+              const isCasal = isCasalPayer(tx);
+              const isFelipe = !isCasal && (tx.usuario_id === 'usr-felipe' || tx.pagoPor === 'Felipe');
               return (
                 <div
                   key={tx.id}
@@ -803,8 +809,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {tx.estabelecimento || 'Lançamento Diverso'}
                       </span>
                       <span className="text-[10px] text-[#565e74] flex items-center gap-1 mt-0.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`} />
-                        {isFelipe ? 'Felipe' : 'Genivânia'} • {tx.data}
+                        <span className={`w-1.5 h-1.5 rounded-full ${isCasal ? 'bg-[#7c3aed]' : isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'}`} />
+                        {isCasal ? 'Casal' : isFelipe ? 'Felipe' : 'Genivânia'} • {tx.data}
                       </span>
                     </div>
                   </div>
@@ -1506,20 +1512,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </thead>
               <tbody className="divide-y divide-[#f1f5f9]">
                 {recentTransactions.map((item) => {
-                  const isFelipe = item.usuario_id === 'usr-felipe' || item.pagoPor === 'Felipe';
+                  const isCasal = isCasalPayer(item);
+                  const isFelipe = !isCasal && (item.usuario_id === 'usr-felipe' || item.pagoPor === 'Felipe');
                   return (
                     <tr key={item.id} className="hover:bg-[#f8faff] transition-colors">
                       <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <div
                             className={`w-6 h-6 rounded-full text-white font-bold text-[10px] flex items-center justify-center ${
-                              isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'
+                              isCasal ? 'bg-[#7c3aed]' : isFelipe ? 'bg-[#2563eb]' : 'bg-[#ec4899]'
                             }`}
                           >
-                            {isFelipe ? 'F' : 'G'}
+                            {isCasal ? 'C' : isFelipe ? 'F' : 'G'}
                           </div>
                           <span className="font-semibold text-[#0b1c30]">
-                            {isFelipe ? 'Felipe' : 'Genivânia'}
+                            {isCasal ? 'Casal' : isFelipe ? 'Felipe' : 'Genivânia'}
                           </span>
                         </div>
                       </td>

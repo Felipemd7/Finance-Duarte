@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { User, Transaction, FinancialGoal, ShoppingListItem, FuelLog, SpreadsheetRow, PurchaseItem, Receipt } from '../types';
+import { isConjointDebitPayment } from '../utils/payer';
 
 export interface LoadedSupabaseData {
   users: User[];
@@ -141,7 +142,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
         estabelecimento_id: t.estabelecimento_id,
         formaPagamento: t.forma_pagamento,
         status: (t.status === 'previsto' ? 'pendente' : (t.status || 'pago')) as any,
-        pagoPor: t.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia',
+        pagoPor: isConjointDebitPayment(t.forma_pagamento) ? 'Casal' : (t.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia'),
         observacoes: t.observacoes || '',
         comprovanteId: t.comprovante_id,
         itens: itemsByTxId[t.id] || [],
@@ -195,7 +196,7 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
       kmRodados: Number(f.km_rodados || 0),
       consumoKmPorLitro: Number(f.consumo_km_l || 0),
       custoPorKm: Number(f.custo_por_km || 0),
-      pagoPor: f.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia',
+      pagoPor: isConjointDebitPayment(f.forma_pagamento) ? 'Casal' : (f.usuario_id === 'usr-felipe' ? 'Felipe' : 'Genivânia'),
       formaPagamento: f.forma_pagamento,
       comprovanteUrl: f.comprovante_url,
       transacaoId: f.transacao_id,
