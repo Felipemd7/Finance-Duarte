@@ -1,4 +1,4 @@
-import { EstablishmentType } from '../types';
+import type { EstablishmentType } from '../types';
 
 // Marcas de adquirentes / maquininhas de cartão que NÃO são o nome da loja
 const CARD_TERMINAL_BRANDS = [

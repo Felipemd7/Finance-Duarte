@@ -1,4 +1,4 @@
-import { analyzeReceiptImage } from '../server/receiptAnalyzer';
+import { analyzeReceiptImage } from '../server/receiptAnalyzer.js';
 
 export default async function handler(req: any, res: any) {
   // CORS support

@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
-import { normalizeReceiptData } from '../src/services/receiptNormalizer';
-import { buildTaxonomyPromptBlock, mapCategoryToId } from '../src/shared/taxonomy';
-import { supabaseServer, isSupabaseServerConfigured } from './supabase';
+import { normalizeReceiptData } from '../src/services/receiptNormalizer.js';
+import { buildTaxonomyPromptBlock, mapCategoryToId } from '../src/shared/taxonomy.js';
+import { supabaseServer, isSupabaseServerConfigured } from './supabase.js';
 
 /**
  * Substitui o diretório KNOWN_CNPJS hardcoded: consulta a tabela
