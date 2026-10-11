@@ -38,33 +38,19 @@ import {
   Shield,
   Percent,
 } from 'lucide-react';
-import { FinancialGoal, FuelLog, Transaction } from '../types';
-import { INITIAL_FUEL_LOGS } from '../data/initialData';
+import { FinancialGoal, FuelLog, Transaction, BudgetCategoryItem, CarPlanningItem } from '../types';
 import { formatBRL, getCurrentMonthName, getCurrentMonthCode } from '../utils/formatters';
 import { FuelManagementSection } from './FuelManagementSection';
-
-export interface BudgetCategoryItem {
-  id: string;
-  name: string;
-  spent: number;
-  limit: number;
-  icon: string;
-  note: string;
-  alertPercent?: number;
-  type: 'expense' | 'saving';
-  isCustom?: boolean;
-}
-
-export interface CarPlanningItem {
-  id: string;
-  title: string;
-  amount: number;
-  badge: string;
-  subtext: string;
-  spent?: number;
-  data?: string;
-  type: 'quota' | 'annual' | 'ceiling' | 'monthly';
-}
+import {
+  getCachedCategories,
+  getCachedCarCosts,
+  loadBudgetCategories,
+  loadCarPlanningItems,
+  saveBudgetCategory,
+  deleteBudgetCategory,
+  saveCarPlanningItem,
+  deleteCarPlanningItem,
+} from '../services/budgetCategoriesService';
 
 interface GoalsDesktopViewProps {
   isReclassified: boolean;
@@ -218,98 +204,35 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
 
     return filtered.reduce((acc, t) => acc + t.valor, 0);
   }, [monthTransactions]);
-  // Budget Categories State — merge inteligente: preserva edições do usuário + adiciona novas categorias padrão
-  const [categories, setCategories] = useState<BudgetCategoryItem[]>(() => {
-    const saved = localStorage.getItem('duarte_desktop_categories');
-    let loadedCats: BudgetCategoryItem[] = DEFAULT_CATEGORIES;
-
-    if (saved) {
-      try {
-        const parsed: BudgetCategoryItem[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Filtro de limpeza: remover categorias inválidas ou de "reserva" legadas
-          const cleaned = parsed
-            .filter(
-              (c) =>
-                c.id &&
-                c.id !== 'reserva' &&
-                c.type !== 'saving' &&
-                !(c.name && c.name.toLowerCase().includes('reserva'))
-            )
-            .map((c) => ({
-              ...c,
-              spent: c.spent || 0,
-              alertPercent: c.alertPercent || 85,
-              note:
-                c.note &&
-                (c.note.includes('não essenciais') ||
-                  c.note.includes('dias no ciclo') ||
-                  c.note.includes('regular e controlado') ||
-                  c.note.includes('imprevistos médicos') ||
-                  c.note.includes('atingida!'))
-                  ? ''
-                  : c.note || '',
-            }));
-
-          // Adiciona categorias padrão que o usuário ainda não tem (novas adições)
-          const existingIds = new Set(cleaned.map((c) => c.id));
-          const missingDefaults = DEFAULT_CATEGORIES.filter((d) => !existingIds.has(d.id));
-          loadedCats = [...cleaned, ...missingDefaults];
-        }
-      } catch {
-        loadedCats = DEFAULT_CATEGORIES;
-      }
-    }
-    return loadedCats;
-  });
-
+  // Budget Categories State — fonte da verdade é o Supabase (tabela budget_categories),
+  // sincronizando entre todos os dispositivos do casal (substitui localStorage)
+  const [categories, setCategories] = useState<BudgetCategoryItem[]>(
+    () => getCachedCategories() || DEFAULT_CATEGORIES
+  );
 
   useEffect(() => {
-    localStorage.setItem('duarte_desktop_categories', JSON.stringify(categories));
-  }, [categories]);
+    loadBudgetCategories().then((loaded) => {
+      if (loaded.length > 0) setCategories(loaded);
+    });
+  }, []);
 
-  // Car Costs State
-  const [carCosts, setCarCosts] = useState<CarPlanningItem[]>(() => {
-    const saved = localStorage.getItem('duarte_car_costs');
-    if (saved) {
-      try {
-        const parsed: CarPlanningItem[] = JSON.parse(saved);
-        return parsed.map((c) => ({
-          ...c,
-          title: c.title.replace('(SP)', '(PI)'),
-        }));
-      } catch {}
-    }
-    return DEFAULT_CAR_COSTS;
-  });
+  // Car Costs State — idem, tabela car_planning_items
+  const [carCosts, setCarCosts] = useState<CarPlanningItem[]>(
+    () => getCachedCarCosts() || DEFAULT_CAR_COSTS
+  );
 
   useEffect(() => {
-    localStorage.setItem('duarte_car_costs', JSON.stringify(carCosts));
-  }, [carCosts]);
+    loadCarPlanningItems().then((loaded) => {
+      if (loaded.length > 0) setCarCosts(loaded);
+    });
+  }, []);
 
-  // Fuel Logs State (Telemetria, Odômetro & Comprovantes)
-  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(() => {
-    if (propFuelLogs && propFuelLogs.length > 0) return propFuelLogs;
-    const saved = localStorage.getItem('duarte_fuel_logs');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.length > 0) return parsed;
-      } catch {}
-    }
-    return INITIAL_FUEL_LOGS;
-  });
+  // Fuel Logs State (Telemetria, Odômetro & Comprovantes) — vem sempre de App.tsx/Supabase
+  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(propFuelLogs || []);
 
   useEffect(() => {
-    if (propFuelLogs && propFuelLogs.length > 0) {
-      setFuelLogs(propFuelLogs);
-      localStorage.setItem('duarte_fuel_logs', JSON.stringify(propFuelLogs));
-    }
+    if (propFuelLogs) setFuelLogs(propFuelLogs);
   }, [propFuelLogs]);
-
-  useEffect(() => {
-    localStorage.setItem('duarte_fuel_logs', JSON.stringify(fuelLogs));
-  }, [fuelLogs]);
 
   const handleAddFuelLog = (log: FuelLog) => {
     setFuelLogs((prev) => [...prev, log]);
@@ -388,22 +311,19 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     const numAlert = parseInt(catAlertPercent, 10) || 85;
     const currentRealSpent = calculateRealSpent(editingCategory);
 
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === editingCategory.id
-          ? {
-              ...c,
-              name: catName.trim() || c.name,
-              limit: numLimit,
-              alertPercent: numAlert,
-              spent: currentRealSpent,
-              note: catNote.trim(),
-              icon: catIcon,
-              type: catType,
-            }
-          : c
-      )
-    );
+    const updatedCat: BudgetCategoryItem = {
+      ...editingCategory,
+      name: catName.trim() || editingCategory.name,
+      limit: numLimit,
+      alertPercent: numAlert,
+      spent: currentRealSpent,
+      note: catNote.trim(),
+      icon: catIcon,
+      type: catType,
+    };
+
+    setCategories((prev) => prev.map((c) => (c.id === editingCategory.id ? updatedCat : c)));
+    saveBudgetCategory(updatedCat);
 
     setEditingCategory(null);
     onShowToast(`Teto da categoria "${catName}" atualizado com sucesso!`);
@@ -413,6 +333,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
   const handleDeleteCategory = (id: string) => {
     if (confirm('Tem certeza que deseja remover esta categoria de teto orçamentário?')) {
       setCategories((prev) => prev.filter((c) => c.id !== id));
+      deleteBudgetCategory(id);
       setEditingCategory(null);
       onShowToast('Categoria removida do painel.');
     }
@@ -450,6 +371,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     };
 
     setCategories((prev) => [...prev, newCat]);
+    saveBudgetCategory(newCat);
     setIsNewCategoryModalOpen(false);
     onShowToast(`Nova categoria "${newCat.name}" adicionada ao orçamento!`);
   };
@@ -473,21 +395,18 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     const amt = parseFloat(carAmount.replace(',', '.')) || 0;
     const sp = carSpent ? parseFloat(carSpent.replace(',', '.')) : undefined;
 
-    setCarCosts((prev) =>
-      prev.map((c) =>
-        c.id === editingCarCost.id
-          ? {
-              ...c,
-              title: carTitle.trim(),
-              amount: amt,
-              spent: sp,
-              data: carDate ? carDate.trim() : undefined,
-              badge: carBadge.trim(),
-              subtext: carSubtext.trim(),
-            }
-          : c
-      )
-    );
+    const updatedCarItem: CarPlanningItem = {
+      ...editingCarCost,
+      title: carTitle.trim(),
+      amount: amt,
+      spent: sp,
+      data: carDate ? carDate.trim() : undefined,
+      badge: carBadge.trim(),
+      subtext: carSubtext.trim(),
+    };
+
+    setCarCosts((prev) => prev.map((c) => (c.id === editingCarCost.id ? updatedCarItem : c)));
+    saveCarPlanningItem(updatedCarItem);
 
     setEditingCarCost(null);
     onShowToast(`Item do veículo "${carTitle}" atualizado!`);
@@ -498,6 +417,7 @@ export const GoalsDesktopView: React.FC<GoalsDesktopViewProps> = ({
     const item = carCosts.find((c) => c.id === id);
     if (confirm(`Deseja remover o custo planejado "${item?.title || 'este custo'}"?`)) {
       setCarCosts((prev) => prev.filter((c) => c.id !== id));
+      deleteCarPlanningItem(id);
       setEditingCarCost(null);
       onShowToast('Custo removido do planejamento.');
     }

@@ -67,11 +67,9 @@ function aistudioMediaPlugin(): Plugin {
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss(), aistudioMediaPlugin()],
-    define: {
-      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(
-        process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''
-      ),
-    },
+    // IMPORTANTE: GEMINI_API_KEY nunca deve ser injetada aqui — o scanner de IA
+    // roda inteiramente no servidor (server/receiptAnalyzer.ts); embutir a chave
+    // no bundle do navegador a exporia publicamente no DevTools de qualquer visitante.
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

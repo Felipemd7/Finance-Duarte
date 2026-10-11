@@ -142,6 +142,7 @@ export interface Receipt {
   estabelecimento: string;
   tipoEstabelecimento: EstablishmentType;
   numeroCupom?: string;
+  subcategoriaSugerida?: string;
   valorTotal: number;
   status: 'Conciliado' | 'Pendente Vinculação' | 'Processando' | 'Pendente';
   itens: PurchaseItem[];
@@ -283,6 +284,29 @@ export interface FuelLog {
   transacaoId?: string;
   comprovanteId?: string;
   veiculoId?: string;
+}
+
+export interface BudgetCategoryItem {
+  id: string;
+  name: string;
+  spent: number;
+  limit: number;
+  icon: string;
+  note: string;
+  alertPercent?: number;
+  type: 'expense' | 'saving';
+  isCustom?: boolean;
+}
+
+export interface CarPlanningItem {
+  id: string;
+  title: string;
+  amount: number;
+  badge: string;
+  subtext: string;
+  spent?: number;
+  data?: string;
+  type: 'quota' | 'annual' | 'ceiling' | 'monthly';
 }
 
 export interface Vehicle {

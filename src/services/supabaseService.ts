@@ -1,6 +1,9 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { User, Transaction, FinancialGoal, ShoppingListItem, FuelLog, SpreadsheetRow, PurchaseItem, Receipt } from '../types';
 import { isConjointDebitPayment } from '../utils/payer';
+import { mapCategoryToId, mapSubcategoryToId, subcategoryIdToName } from '../shared/taxonomy';
+
+export { mapCategoryToId, mapSubcategoryToId };
 
 export interface LoadedSupabaseData {
   users: User[];
@@ -319,67 +322,13 @@ export async function fetchSupabaseData(): Promise<LoadedSupabaseData | null> {
 }
 
 // Mapa de IDs de subcategoria para nomes legíveis em português (com acentos)
-export const SUBCATEGORIA_DISPLAY_MAP: Record<string, string> = {
-  'sub-aluguel': 'Aluguel',
-  'sub-condominio': 'Condomínio',
-  'sub-internet': 'Internet / TV',
-  'sub-rastreador': 'Rastreador',
-  'sub-seguro': 'Seguro (Carro)',
-  'sub-amazon-music': 'Amazon Music',
-  'sub-youtube-premium': 'Youtube Premium',
-  'sub-agua': 'Água',
-  'sub-combustivel': 'Combustível',
-  'sub-gas': 'Gás',
-  'sub-lazer': 'Lazer',
-  'sub-luz': 'Luz',
-  'sub-placa-solar': 'Placa Solar',
-  'sub-supermercado': 'Supermercado',
-  'sub-eventualidades': 'Eventualidades',
-  'sub-manutencao-carro': 'Manutenção de carro',
-  'sub-ipva': 'IPVA',
-  'sub-farmacia': 'Farmácia',
-  'sub-estacionamento': 'Estacionamento',
-  'sub-uber': 'Uber / Transporte',
-};
-
-// Mapeamento automático de categorias e subcategorias para o Supabase
-export function mapCategoryToId(cat?: string): string {
-  if (cat === 'Invariável') return 'cat-invariavel';
-  if (cat === 'Extra/Eventualidades') return 'cat-extra';
-  return 'cat-variavel';
-}
-
-export function mapSubcategoryToId(nomeSub?: string, categoria?: string): string {
-  const norm = (nomeSub || '').toLowerCase();
-  // Assinaturas e serviços fixos (Invariável)
-  if (norm.includes('aluguel')) return 'sub-aluguel';
-  if (norm.includes('condom')) return 'sub-condominio';
-  if (norm.includes('internet') || norm.includes('fibra') || norm.includes('internet / tv')) return 'sub-internet';
-  if (norm.includes('rastreador')) return 'sub-rastreador';
-  if (norm.includes('seguro')) return 'sub-seguro';
-  if (norm.includes('youtube') || norm.includes('yt premium') || norm.includes('youtube premium')) return 'sub-youtube-premium';
-  if (norm.includes('amazon music')) return 'sub-amazon-music';
-  // Variáveis
-  if (norm.includes('placa solar') || norm.includes('solar')) return 'sub-placa-solar';
-  if (norm.includes('estacionamento') || norm.includes('estac') || norm.includes('pedagio') || norm.includes('pedágio')) return 'sub-estacionamento';
-  if (norm.includes('supermercado') || norm.includes('feira') || norm.includes('frigor')) return 'sub-supermercado';
-  if (norm.includes('combust') || norm.includes('gasolina') || norm.includes('etanol') || norm.includes('diesel')) return 'sub-combustivel';
-  if (norm.includes('farm') || norm.includes('medic') || norm.includes('saúde') || norm.includes('saude') || norm.includes('remedio') || norm.includes('exame')) return 'sub-farmacia';
-  if (norm.includes('lazer') || norm.includes('restaurante') || norm.includes('bar') || norm.includes('jantar')) return 'sub-lazer';
-  if (norm.includes('luz') || norm.includes('energia') || norm.includes('elétrica') || norm.includes('eletrica')) return 'sub-luz';
-  if (norm.includes('agua') || norm.includes('água')) return 'sub-agua';
-  if (norm.includes('gás') || norm.includes('gas') || norm.includes('botijão') || norm.includes('botijao')) return 'sub-gas';
-  if (norm.includes('uber') || norm.includes('transporte app') || norm.includes('mobilidade')) return 'sub-uber';
-  // Extra/Eventualidades
-  if (norm.includes('manuten') && norm.includes('carro')) return 'sub-manutencao-carro';
-  if (norm.includes('ipva')) return 'sub-ipva';
-  if (norm.includes('eventualidade') || norm.includes('eventual')) return 'sub-eventualidades';
-
-  // Fallbacks por categoria — CORRIGIDO: Invariável não cai mais em sub-aluguel
-  if (categoria === 'Invariável') return 'sub-internet'; // serviço/assinatura genérica
-  if (categoria === 'Extra/Eventualidades') return 'sub-eventualidades';
-  return 'sub-supermercado';
-}
+// Fonte única: src/shared/taxonomy.ts (reaproveitado também pelo scanner de IA no servidor)
+export const SUBCATEGORIA_DISPLAY_MAP: Record<string, string> = Object.fromEntries(
+  ['sub-aluguel', 'sub-condominio', 'sub-internet', 'sub-rastreador', 'sub-seguro', 'sub-amazon-music', 'sub-youtube-premium',
+   'sub-agua', 'sub-combustivel', 'sub-gas', 'sub-lazer', 'sub-luz', 'sub-placa-solar', 'sub-supermercado',
+   'sub-eventualidades', 'sub-manutencao-carro', 'sub-ipva', 'sub-farmacia', 'sub-estacionamento', 'sub-uber']
+    .map((id) => [id, subcategoryIdToName(id)])
+);
 
 function normalizeFuelType(fuel?: string): 'Gasolina Comum' | 'Gasolina Aditivada' | 'Etanol' | 'Diesel' {
   if (!fuel) return 'Gasolina Comum';
@@ -864,19 +813,10 @@ export async function saveScannedReceiptToCloud(
         tipo: 'despesa',
         forma_pagamento: transaction.formaPagamento || 'Cartão conjunto Inter',
         status: transaction.status === 'pendente' ? 'previsto' : 'pago',
-        categoria_id: 'cat-variavel',
+        categoria_id: transaction.categoria_id || mapCategoryToId(transaction.categoria),
         subcategoria_id:
-          receipt.tipoEstabelecimento === 'Farmácia'
-            ? 'sub-farmacia'
-            : receipt.tipoEstabelecimento === 'Posto de combustível'
-            ? 'sub-combustivel'
-            : receipt.tipoEstabelecimento === 'Estacionamento' || receipt.tipoEstabelecimento === 'Pedágio'
-            ? 'sub-estacionamento'
-            : receipt.tipoEstabelecimento === 'Restaurante/Lazer'
-            ? 'sub-lazer'
-            : receipt.tipoEstabelecimento === 'Oficina'
-            ? 'sub-manutencao-carro'
-            : 'sub-supermercado',
+          transaction.subcategoria_id ||
+          mapSubcategoryToId(receipt.subcategoriaSugerida || transaction.subcategoria || receipt.tipoEstabelecimento, transaction.categoria),
         estabelecimento_nome: receipt.estabelecimento,
         observacoes: transaction.observacoes || null,
         comprovante_id: receipt.id,
@@ -1046,6 +986,33 @@ export async function deleteGoalFromCloud(id: string): Promise<boolean> {
   } catch (err) {
     console.error('[SupabaseService] Falha ao excluir meta:', err);
     return false;
+  }
+}
+
+// ---------------------------------------------------------
+// LIMITES PADRÃO POR SUBCATEGORIA (Planilha de Fechamento)
+// ---------------------------------------------------------
+
+/**
+ * Carrega os limites/expectativas padrão de cada subcategoria da tabela
+ * `subcategories` (chave = nome de exibição, ex: "Combustível"), substituindo
+ * os valores que antes ficavam hardcoded em DEFAULT_BUDGET_ITEMS.
+ */
+export async function fetchSubcategoryDefaults(): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured) return {};
+  try {
+    const { data, error } = await supabase.from('subcategories').select('nome, limite_padrao');
+    if (error) throw error;
+    const result: Record<string, number> = {};
+    (data || []).forEach((row: any) => {
+      if (row.nome && row.limite_padrao !== null && row.limite_padrao !== undefined) {
+        result[row.nome] = Number(row.limite_padrao);
+      }
+    });
+    return result;
+  } catch (err: any) {
+    console.warn('[SupabaseService] Erro ao carregar limites padrão de subcategorias:', err?.message || err);
+    return {};
   }
 }
 

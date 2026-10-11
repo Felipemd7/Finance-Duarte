@@ -32,7 +32,8 @@ import {
   saveMonthSheetConfig,
   subscribeSheetConfig,
 } from '../services/monthlySheetConfig';
-import { isCasalPayer } from '../utils/payer';
+import { isCasalPayer, isCreditCardPayment, isImmediatePayment } from '../utils/payer';
+import { fetchSubcategoryDefaults } from '../services/supabaseService';
 
 interface MonthlyBudgetSpreadsheetPanelProps {
   transactions: Transaction[];
@@ -366,27 +367,6 @@ const MONTHS_LIST = [
   { code: '2026-12', name: 'Dezembro 2026' },
 ];
 
-// Identifica se uma forma de pagamento é cartão de crédito
-export const isCreditCardPayment = (forma?: string, obs?: string): boolean => {
-  const str = `${forma || ''} ${obs || ''}`.toLowerCase();
-  // Débito (inclusive 'Cartão conjunto Inter - Débito') nunca é crédito
-  if (str.includes('debito') || str.includes('débito')) return false;
-  if (str.includes('credito') || str.includes('crédito')) return true;
-  if (str.includes('cartao') && !str.includes('debito') && !str.includes('débito')) return true;
-  if (str.includes('fatura') || str.includes('nubank') || str.includes('inter')) return true;
-  return false;
-};
-
-// Identifica se foi pago à vista (PIX, Débito ou Dinheiro)
-export const isImmediatePayment = (forma?: string, obs?: string): boolean => {
-  const str = `${forma || ''} ${obs || ''}`.toLowerCase();
-  if (str.includes('pix')) return true;
-  if (str.includes('debito') || str.includes('débito')) return true;
-  if (str.includes('dinheiro') || str.includes('especie') || str.includes('espécie')) return true;
-  if (str.includes('transferencia') || str.includes('transferência') || str.includes('ted') || str.includes('doc')) return true;
-  return false;
-};
-
 export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPanelProps> = ({
   transactions,
   selectedMonth,
@@ -451,6 +431,15 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     return subscribeSheetConfig(sync);
   }, [activeMonthCode]);
 
+  // Limites/expectativas padrão por subcategoria vindos do Supabase (tabela `subcategories`),
+  // substituindo os valores que antes só existiam hardcoded em DEFAULT_BUDGET_ITEMS.
+  const [dbDefaults, setDbDefaults] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetchSubcategoryDefaults().then((defaults) => {
+      if (Object.keys(defaults).length > 0) setDbDefaults(defaults);
+    });
+  }, []);
+
   // Setters que gravam no Supabase apenas quando o usuário altera (nunca sobrescrevem outro mês)
   const setCustomExpectativas = (v: Record<string, number> | ((p: Record<string, number>) => Record<string, number>)) => {
     const next = typeof v === 'function' ? v(customExpectativas) : v;
@@ -507,8 +496,8 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
 
       const realidade = matchingTxs.reduce((sum, t) => sum + (Number(t.valor) || 0), 0);
 
-      // 1. Expectativa do Item
-      let expectativa = config.expectativaPadrao;
+      // 1. Expectativa do Item — prioridade: override do usuário > valor do Supabase (subcategories.limite_padrao) > fallback hardcoded
+      let expectativa = dbDefaults[config.descricao] !== undefined ? dbDefaults[config.descricao] : config.expectativaPadrao;
       if (customExpectativas[config.descricao] !== undefined) {
         expectativa = customExpectativas[config.descricao];
       } else if (config.descricao === 'Youtube premium' && activeMonthCode < '2026-06') {
@@ -605,7 +594,7 @@ export const MonthlyBudgetSpreadsheetPanel: React.FC<MonthlyBudgetSpreadsheetPan
     }
 
     return rows;
-  }, [monthExpenses, customExpectativas, customSituacoes, customVencimentos, activeMonthCode]);
+  }, [monthExpenses, customExpectativas, customSituacoes, customVencimentos, activeMonthCode, dbDefaults]);
 
   // Efeito de conciliação automática: Se uma conta está marcada como 'Paga' na planilha
   // (seja por histórico consolidado ou marcação manual), garante que as transações vinculadas sejam atualizadas para 'pago'

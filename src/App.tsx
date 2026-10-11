@@ -31,11 +31,11 @@ import {
   saveGoalToCloud,
   updateGoalInCloud,
   deleteGoalFromCloud,
-  updateTransactionInCloud,
   deleteTransactionFromCloud,
   updateTransactionsBatchStatusInCloud,
 } from './services/supabaseService';
 import { getCurrentMonthName } from './utils/formatters';
+import { mapCategoryToId, mapSubcategoryToId, subcategoryIdToName, categoryNameForSubcategoryId } from './shared/taxonomy';
 
 const VALID_TABS = ['dashboard', 'extrato', 'scanner', 'metas', 'lista', 'relatorios', 'voz'];
 
@@ -383,23 +383,23 @@ export default function App() {
                      formaPgtoResolved.toLowerCase().includes('crédito') ||
                      (formaPgtoResolved.toLowerCase().includes('cartao') && !formaPgtoResolved.toLowerCase().includes('debito'));
 
+    // Usa a subcategoria real já identificada pela IA do scanner (receipt.subcategoriaSugerida,
+    // ex: "sub-luz", "sub-manutencao-carro") em vez de adivinhar com um if/else estreito que só
+    // reconhecia Farmácia/Posto/Estacionamento/Lazer/Oficina e caía tudo em "Supermercado".
+    const subcategoriaId =
+      receipt.subcategoriaSugerida && /^sub-/.test(receipt.subcategoriaSugerida)
+        ? receipt.subcategoriaSugerida
+        : mapSubcategoryToId(receipt.tipoEstabelecimento);
+    const categoriaNome = categoryNameForSubcategoryId(subcategoriaId);
+
     const newTx: Transaction = {
       id: txId,
       data: txDate,
       tipo: 'despesa',
-      categoria: 'Variável',
-      subcategoria:
-        receipt.tipoEstabelecimento === 'Farmácia'
-          ? 'Farmácia'
-          : receipt.tipoEstabelecimento === 'Posto de combustível'
-          ? 'Combustível'
-          : receipt.tipoEstabelecimento === 'Estacionamento' || receipt.tipoEstabelecimento === 'Pedágio'
-          ? 'Estacionamento'
-          : receipt.tipoEstabelecimento === 'Restaurante/Lazer'
-          ? 'Lazer'
-          : receipt.tipoEstabelecimento === 'Oficina'
-          ? 'Manutenção Veículo'
-          : 'Supermercado',
+      categoria: categoriaNome,
+      categoria_id: mapCategoryToId(categoriaNome),
+      subcategoria: subcategoryIdToName(subcategoriaId),
+      subcategoria_id: subcategoriaId,
       estabelecimento: receipt.estabelecimento,
       valor: receipt.valorTotal,
       formaPagamento: formaPgtoResolved,
@@ -543,7 +543,11 @@ export default function App() {
     }
   };
 
-  const handleUpdateTransaction = async (updatedTx: Transaction) => {
+  // Nota: a persistência no Supabase desta transação já é feita pelo próprio
+  // NewTransactionModal (addTransactionToCloud/updateTransactionInCloud) antes
+  // de chamar este handler — aqui só precisamos refletir no estado local,
+  // para não disparar uma segunda chamada de rede duplicada ao salvar.
+  const handleUpdateTransaction = (updatedTx: Transaction) => {
     setTransactions((prev) =>
       prev.map((t) => (t.id === updatedTx.id ? updatedTx : t))
     );
@@ -564,7 +568,6 @@ export default function App() {
         )
       );
     }
-    await updateTransactionInCloud(updatedTx);
   };
 
   const handleDeleteTransaction = async (id: string) => {

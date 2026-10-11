@@ -36,7 +36,6 @@ import {
 } from 'recharts';
 import { FuelLog } from '../types';
 import { formatBRL } from '../utils/formatters';
-import { analyzeFuelReceiptDirect } from '../services/clientOcrService';
 import { FuelCustomAnalyticsDashboard } from './FuelCustomAnalyticsDashboard';
 
 interface FuelManagementSectionProps {
@@ -481,31 +480,15 @@ export const FuelManagementSection: React.FC<FuelManagementSectionProps> = ({
 
       let d: any = null;
 
-      try {
-        const res = await fetch('/api/scan-fuel-receipt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+      const res = await fetch('/api/scan-fuel-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
 
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-            d = json.data;
-          }
-        }
-      } catch (endpointErr) {
-        console.warn('[FuelManagementSection] Endpoint indisponível, usando fallback direto...', endpointErr);
-      }
-
-      // Fallback direto via Gemini AI
-      if (!d && body.imageBase64) {
-        setScanStepMessage('Processando visão computacional diretamente com Gemini AI...');
-        try {
-          d = await analyzeFuelReceiptDirect(body.imageBase64, body.mimeType);
-        } catch (directErr) {
-          console.error('[FuelManagementSection] Fallback direto falhou:', directErr);
-        }
+      const json = await res.json().catch(() => null);
+      if (json?.success && json.data) {
+        d = json.data;
       }
 
       if (d) {

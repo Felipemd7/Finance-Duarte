@@ -45,7 +45,6 @@ import {
 } from 'lucide-react';
 import { Receipt, PurchaseItem, EstablishmentType, FuelLog } from '../types';
 import { formatBRL, getCurrentMonthName } from '../utils/formatters';
-import { analyzeReceiptDirect } from '../services/clientOcrService';
 import { compressImage } from '../utils/imageCompressor';
 
 interface ScannerViewProps {
@@ -503,31 +502,26 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
     try {
       let d: any = null;
+      let serverError: string | undefined;
 
-      try {
-        const response = await fetch('/api/scan-receipt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64,
-            mimeType: mimeType || 'image/jpeg',
-          }),
-        });
+      const response = await fetch('/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: mimeType || 'image/jpeg',
+        }),
+      });
 
-        if (response.ok) {
-          const json = await response.json();
-          if (json.success && json.data) {
-            d = json.data;
-          }
-        }
-      } catch (endpointErr) {
-        console.warn('[ScannerView] Endpoint indisponível, acionando fallback direto...', endpointErr);
+      const json = await response.json().catch(() => null);
+      if (json?.success && json.data) {
+        d = json.data;
+      } else {
+        serverError = json?.error;
       }
 
-      // Fallback direto: se o endpoint da API não respondeu ou deu erro, usa cliente direto Gemini
       if (!d) {
-        setScanStepMessage(`Conectando diretamente com IA Gemini (${fileName})...`);
-        d = await analyzeReceiptDirect(base64, mimeType);
+        showToast(serverError || 'Não foi possível ler o comprovante. Tente novamente com uma foto mais nítida.');
       }
 
       if (d) {
@@ -588,6 +582,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               ? d.comprador
               : 'Felipe Duarte & Genivânia Duarte',
           tipoEstabelecimento: (d.tipoEstabelecimento as EstablishmentType) || 'Supermercado',
+          subcategoriaSugerida: d.subcategoria_id as string | undefined,
           litros: d.litros !== undefined ? Number(d.litros) : undefined,
           kmAtual: d.kmAtual !== undefined ? Number(d.kmAtual) : undefined,
           tipoCombustivel: d.tipoCombustivel || ((d.tipoEstabelecimento === 'Posto de combustível') ? 'Gasolina Comum' : undefined),
@@ -606,6 +601,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             data: rawDate,
             estabelecimento: newReceiptModel.estabelecimento,
             tipoEstabelecimento: newReceiptModel.tipoEstabelecimento,
+            subcategoriaSugerida: newReceiptModel.subcategoriaSugerida,
             numeroCupom: newReceiptModel.numeroCupom,
             valorTotal: totalCalculated,
             status: 'Pendente',
@@ -693,6 +689,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       data: extractedReceipt.dataHora || new Date().toISOString(),
       estabelecimento: extractedReceipt.estabelecimento,
       tipoEstabelecimento: extractedReceipt.tipoEstabelecimento || 'Supermercado',
+      subcategoriaSugerida: extractedReceipt.subcategoriaSugerida,
       numeroCupom: extractedReceipt.numeroCupom,
       valorTotal: extractedReceipt.totalLido,
       status: 'Conciliado',
