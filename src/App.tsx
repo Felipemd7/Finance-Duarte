@@ -463,7 +463,10 @@ export default function App() {
         return [...prev, newFuelLog];
       });
 
-      addFuelLogToCloud(newFuelLog);
+      // Nota: NÃO chamamos addFuelLogToCloud aqui — saveScannedReceiptToCloud (abaixo) já
+      // grava a transação E o fuel_log para comprovantes de posto. Chamar os dois criava
+      // dois registros de fuel_logs duplicados para o mesmo abastecimento (visível no
+      // Histórico de Abastecimento), com o risco de excluir a transação ao remover "o duplicado".
     }
 
     // Salvar na nuvem Supabase com await e retorno booleano

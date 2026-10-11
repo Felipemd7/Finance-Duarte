@@ -150,17 +150,9 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
     '2026-12': 'Dezembro 2026',
   };
 
-  const monthsList = [
-    'Janeiro 2026',
-    'Fevereiro 2026',
-    'Março 2026',
-    'Abril 2026',
-    'Maio 2026',
-    'Junho 2026',
-    'Julho 2026',
-    'Agosto 2026',
-    'Setembro 2026',
-  ];
+  // Lista de meses do seletor: sempre os 12 meses do ano (nunca mais trava num mês fixo
+  // conforme novos dados reais entram pelo Scanner).
+  const monthsList = Object.keys(monthNameToCode);
 
   // Helper to extract clean establishment name
   const getCleanEstablishment = (t: Transaction): string => {
@@ -237,19 +229,14 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
   // =========================================================================
   const biData = useMemo(() => {
     const allSuperTxs = transactions.filter(isSupermarketRelated);
-    const activeCode = monthNameToCode[activeMonthFilter] || '2026-08';
+    const activeCode = monthNameToCode[activeMonthFilter] || monthNameToCode[selectedMonth] || '2026-08';
 
-    // 1. Calculate Historical Evolution Month by Month (Jan to Ago 2026) for BI Area/Bar Chart
-    const evolutionMonths = [
-      '2026-01',
-      '2026-02',
-      '2026-03',
-      '2026-04',
-      '2026-05',
-      '2026-06',
-      '2026-07',
-      '2026-08',
-    ];
+    // 1. Calculate Historical Evolution Month by Month for BI Area/Bar Chart.
+    // Sempre cobre no mínimo Jan-Ago (baseline histórico) e se estende automaticamente
+    // até o mês ativo (ex: Outubro), em vez de uma lista fixa que ficava desatualizada.
+    const allMonthCodesOrdered = Object.keys(codeToMonthName);
+    const activeIdx = Math.max(allMonthCodesOrdered.indexOf(activeCode), 7); // garante Jan-Ago no mínimo
+    const evolutionMonths = allMonthCodesOrdered.slice(0, activeIdx + 1);
 
     const evolutionChartData = evolutionMonths.map((mCode) => {
       const txsInMonth = allSuperTxs.filter((t) => {
@@ -314,6 +301,10 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
         '2026-06': 'Jun',
         '2026-07': 'Jul',
         '2026-08': 'Ago',
+        '2026-09': 'Set',
+        '2026-10': 'Out',
+        '2026-11': 'Nov',
+        '2026-12': 'Dez',
       };
 
       return {
@@ -361,7 +352,8 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
         const d = t.data || '';
         return d.startsWith('2026-');
       });
-      periodLabel = 'Acumulado 2026 (Jan a Ago)';
+      const lastMonthName = (codeToMonthName[activeCode] || activeMonthFilter).replace(' 2026', '');
+      periodLabel = `Acumulado 2026 (Jan a ${lastMonthName})`;
     }
 
     // 3. Apply Buyer Filter (Casal, Felipe, Genivânia)
@@ -379,6 +371,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
     let totalLaticinios = 0;
     let totalHortifruti = 0;
     let totalSnacks = 0;
+    let totalHigiene = 0;
 
     let totalWeightKg = 0;
     let totalLiquidL = 0;
@@ -390,6 +383,12 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
     const laticiniosItems: Array<{ label: string; store: string; price?: number }> = [];
     const hortifrutiItems: Array<{ label: string; store: string; price?: number }> = [];
     const snacksItems: Array<{ label: string; store: string; price?: number }> = [];
+    const higieneItems: Array<{ label: string; store: string; price?: number }> = [];
+
+    // Itens de saúde/remédio desmembrados de compras no supermercado — não entram no
+    // orçamento de Supermercado, migram para o orçamento de Farmácia (ver farmaciaLazerData).
+    const desmembradoFarmaciaItems: Array<{ label: string; store: string; price?: number }> = [];
+    let totalDesmembradoFarmacia = 0;
 
     const storeMap: Record<string, { total: number; count: number; meatTotal: number }> = {};
     const storesByBasket: Record<string, Record<string, number>> = {
@@ -399,6 +398,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
       laticinios: {},
       hortifruti: {},
       snacks: {},
+      higiene: {},
     };
 
     filteredPeriodTxs.forEach((t) => {
@@ -430,6 +430,19 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
           const qtd = Number(it.quantidade) || 1;
           const unitPrice = Number(it.precoUnitario || it.preco_unitario) || 0;
           const totalVal = Number(it.precoTotal || it.preco_total) || (qtd * unitPrice) || 0;
+
+          // Item de remédio/saúde desmembrado: não conta no orçamento de Supermercado,
+          // vai para o catálogo de Farmácia (farmaciaLazerData), respeitando o
+          // desmembramento que a IA do scanner já identifica nos comprovantes.
+          if (it.desmembrado || cat.includes('remedio') || cat.includes('medicament')) {
+            totalDesmembradoFarmacia += totalVal;
+            desmembradoFarmaciaItems.push({
+              label: itemName ? `${itemName} (${qtd} un)` : 'Medicamento desmembrado',
+              store: est,
+              price: totalVal,
+            });
+            return;
+          }
 
           if (
             cat.includes('acougue') ||
@@ -496,6 +509,17 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
             totalWeightKg += qtd;
             graosItems.push({
               label: itemName ? `${itemName} (${qtd} ${it.unidade || 'kg'})` : `Alimentos Secos (${qtd.toFixed(1)} kg)`,
+              store: est,
+              price: totalVal,
+            });
+          } else if (
+            cat.includes('higiene') ||
+            /sabonete|shampoo|condicionador|creme dental|escova de dente|papel higi[eê]nico|absorvente|fralda|desodorante|protetor solar|perfume|hidratante/i.test(nameLower)
+          ) {
+            totalHigiene += totalVal;
+            storesByBasket.higiene[est] = (storesByBasket.higiene[est] || 0) + totalVal;
+            higieneItems.push({
+              label: itemName ? `${itemName} (${qtd} un)` : 'Higiene & Cuidados Pessoais',
               store: est,
               price: totalVal,
             });
@@ -603,7 +627,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
       }
     });
 
-    const totalSpending = totalCarnes + totalGraos + totalLimpeza + totalLaticinios + totalHortifruti + totalSnacks;
+    const totalSpending = totalCarnes + totalGraos + totalLimpeza + totalLaticinios + totalHortifruti + totalSnacks + totalHigiene;
     const safeTotal = totalSpending > 0 ? totalSpending : 1;
 
     // 5. Build Distribution for BI Donut Chart and List
@@ -667,6 +691,16 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
         percent: Number(((totalSnacks / safeTotal) * 100).toFixed(1)),
         color: '#d97706',
         badgeBg: 'bg-[#fffbeb] text-[#d97706] border-[#fef3c7]',
+      },
+      {
+        id: 'higiene',
+        name: 'Higiene & Cuidados',
+        shortName: 'Higiene',
+        icon: '🧴',
+        amount: totalHigiene,
+        percent: Number(((totalHigiene / safeTotal) * 100).toFixed(1)),
+        color: '#9333ea',
+        badgeBg: 'bg-[#faf5ff] text-[#9333ea] border-[#e9d5ff]',
       },
     ].sort((a, b) => b.amount - a.amount);
 
@@ -875,6 +909,33 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
           })),
         alertText: 'Doces e extras eventuais moderados para preservar o teto orçamentário',
       },
+      {
+        id: 'higiene',
+        title: 'Higiene & Cuidados Pessoais',
+        shortTitle: 'Higiene',
+        amount: totalHigiene,
+        share: `${((totalHigiene / safeTotal) * 100).toFixed(1).replace('.', ',')}%`,
+        iconEmoji: '🧴',
+        metric1Label: 'Natureza do Dispêndio',
+        metric1Value: 'Cuidados pessoais',
+        metric2Label: 'Itens Rastreados',
+        metric2Value: `${higieneItems.length} itens`,
+        items: getTopItems(higieneItems),
+        color: '#9333ea',
+        accentBg: 'bg-purple-50',
+        accentText: 'text-purple-700',
+        borderColor: 'border-purple-200',
+        borderTopClass: 'border-t-4 border-t-[#9333ea]',
+        stores: Object.entries(storesByBasket.higiene || {})
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(([name, val]) => ({
+            name,
+            amount: val,
+            percent: totalHigiene > 0 ? Number(((val / totalHigiene) * 100).toFixed(1)) : 0,
+          })),
+        alertText: 'Itens de higiene comprados no supermercado agora têm cesta própria, separados de Grãos & Mercearia',
+      },
     ];
 
     // Filter transactions for the interactive table
@@ -913,6 +974,8 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
       evolutionChartData,
       tableFilteredTxs,
       avgTicket: totalSpending / (filteredPeriodTxs.length || 1),
+      desmembradoFarmaciaItems,
+      totalDesmembradoFarmacia,
     };
   }, [
     transactions,
@@ -928,6 +991,97 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
   const sortedCards = [...biData.subcategoryCards].sort((a, b) =>
     sortByAmount ? b.amount - a.amount : a.title.localeCompare(b.title)
   );
+
+  // =========================================================================
+  // CATÁLOGO DE ITENS: FARMÁCIA & LAZER
+  // Mesmo padrão de quebra por item usado no Supermercado, aplicado às
+  // transações de Farmácia e Lazer — mais os itens de remédio desmembrados
+  // de compras de supermercado (biData.desmembradoFarmaciaItems).
+  // =========================================================================
+  const farmaciaLazerData = useMemo(() => {
+    const buildCatalog = (matchSub: (sub: string) => boolean) => {
+      const txs = transactions.filter((t) => {
+        if (t.tipo !== 'despesa') return false;
+        const sub = (t.subcategoria || t.subcategoria_id || '').toLowerCase();
+        return matchSub(sub);
+      });
+
+      const items: Array<{ label: string; store: string; price?: number }> = [];
+      const storeTotals: Record<string, number> = {};
+      let total = 0;
+
+      txs.forEach((t) => {
+        const est = getCleanEstablishment(t);
+        total += t.valor;
+        storeTotals[est] = (storeTotals[est] || 0) + t.valor;
+
+        const rawItems: PurchaseItem[] = (t.itens && t.itens.length > 0)
+          ? t.itens
+          : (t.itensDetalhados && t.itensDetalhados.length > 0)
+          ? t.itensDetalhados
+          : [];
+
+        if (rawItems.length > 0) {
+          rawItems.forEach((it) => {
+            const itemName = it.nome || it.nome_do_item || '';
+            const qtd = Number(it.quantidade) || 1;
+            const unitPrice = Number(it.precoUnitario || it.preco_unitario) || 0;
+            const totalVal = Number(it.precoTotal || it.preco_total) || (qtd * unitPrice) || 0;
+            items.push({
+              label: itemName ? `${itemName} (${qtd} un)` : `Compra em ${est}`,
+              store: est,
+              price: totalVal,
+            });
+          });
+        } else {
+          items.push({ label: `Compra em ${est}`, store: est, price: t.valor });
+        }
+      });
+
+      return { txs, items, storeTotals, total };
+    };
+
+    const farmacia = buildCatalog((sub) => sub.includes('farmacia') || sub.includes('farmácia'));
+    const lazer = buildCatalog((sub) => sub.includes('lazer'));
+
+    // Soma os itens de remédio desmembrados de compras de supermercado ao catálogo de Farmácia
+    const farmaciaItemsCombined = [...farmacia.items, ...biData.desmembradoFarmaciaItems];
+    const farmaciaTotalCombined = farmacia.total + biData.totalDesmembradoFarmacia;
+    const farmaciaStoresCombined = { ...farmacia.storeTotals };
+    biData.desmembradoFarmaciaItems.forEach((it) => {
+      farmaciaStoresCombined[it.store] = (farmaciaStoresCombined[it.store] || 0) + (it.price || 0);
+    });
+
+    const topItems = (list: Array<{ label: string; store: string; price?: number }>) => {
+      const seen = new Set<string>();
+      const sorted = [...list].sort((a, b) => (b.price || 0) - (a.price || 0));
+      const result: Array<{ label: string; store: string; price?: number }> = [];
+      for (const it of sorted) {
+        if (!seen.has(it.label)) {
+          seen.add(it.label);
+          result.push(it);
+          if (result.length >= 8) break;
+        }
+      }
+      return result;
+    };
+
+    return {
+      farmacia: {
+        total: farmaciaTotalCombined,
+        txCount: farmacia.txs.length,
+        desmembradoCount: biData.desmembradoFarmaciaItems.length,
+        topItems: topItems(farmaciaItemsCombined),
+        stores: Object.entries(farmaciaStoresCombined).sort((a, b) => b[1] - a[1]).slice(0, 5),
+      },
+      lazer: {
+        total: lazer.total,
+        txCount: lazer.txs.length,
+        topItems: topItems(lazer.items),
+        stores: Object.entries(lazer.storeTotals).sort((a, b) => b[1] - a[1]).slice(0, 5),
+      },
+    };
+  }, [transactions, biData.desmembradoFarmaciaItems, biData.totalDesmembradoFarmacia]);
 
   return (
     <div
@@ -1033,7 +1187,7 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                Acumulado 2026 (Jan-Ago)
+                Acumulado 2026
               </button>
             </div>
 
@@ -1752,6 +1906,104 @@ export const MarketAnalyticsReportsView: React.FC<MarketAnalyticsReportsViewProp
             ))}
           </div>
         )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4.5 CATÁLOGO DE ITENS: FARMÁCIA & LAZER                                    */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Farmácia */}
+        <div className="bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-sm flex flex-col gap-3 border-t-4 border-t-rose-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💊</span>
+              <div>
+                <h4 className="font-display font-bold text-sm text-slate-900">Farmácia & Saúde</h4>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  {farmaciaLazerData.farmacia.txCount} compra(s)
+                  {farmaciaLazerData.farmacia.desmembradoCount > 0
+                    ? ` + ${farmaciaLazerData.farmacia.desmembradoCount} item(ns) desmembrado(s) do Supermercado`
+                    : ''}
+                </span>
+              </div>
+            </div>
+            <span className="font-display font-black text-base text-slate-900 tnum">
+              {formatBRL(farmaciaLazerData.farmacia.total)}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {farmaciaLazerData.farmacia.topItems.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-1">Nenhuma compra de Farmácia em {biData.periodLabel}.</p>
+            ) : (
+              farmaciaLazerData.farmacia.topItems.map((it, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[11px] text-slate-700 py-0.5">
+                  <span className="truncate">• {it.label}</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">
+                      {it.store}
+                    </span>
+                    <span className="font-mono font-bold text-rose-700">{formatBRL(it.price || 0)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {farmaciaLazerData.farmacia.stores.length > 0 && (
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+              {farmaciaLazerData.farmacia.stores.map(([name, val]) => (
+                <span key={name} className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                  {name} • {formatBRL(val)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Lazer */}
+        <div className="bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-sm flex flex-col gap-3 border-t-4 border-t-amber-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🎉</span>
+              <div>
+                <h4 className="font-display font-bold text-sm text-slate-900">Lazer & Restaurantes</h4>
+                <span className="text-[10px] text-slate-500 font-medium">{farmaciaLazerData.lazer.txCount} compra(s)</span>
+              </div>
+            </div>
+            <span className="font-display font-black text-base text-slate-900 tnum">
+              {formatBRL(farmaciaLazerData.lazer.total)}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {farmaciaLazerData.lazer.topItems.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-1">Nenhuma compra de Lazer em {biData.periodLabel}.</p>
+            ) : (
+              farmaciaLazerData.lazer.topItems.map((it, idx) => (
+                <div key={idx} className="flex items-center justify-between text-[11px] text-slate-700 py-0.5">
+                  <span className="truncate">• {it.label}</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">
+                      {it.store}
+                    </span>
+                    <span className="font-mono font-bold text-amber-700">{formatBRL(it.price || 0)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {farmaciaLazerData.lazer.stores.length > 0 && (
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+              {farmaciaLazerData.lazer.stores.map(([name, val]) => (
+                <span key={name} className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  {name} • {formatBRL(val)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ========================================================================= */}
