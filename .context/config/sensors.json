@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-13T20:45:12.506Z",
+  "source": "manual",
+  "stack": {
+    "primaryLanguage": "typescript",
+    "languages": [
+      "javascript",
+      "typescript"
+    ],
+    "frameworks": [],
+    "buildTools": [
+      "vite"
+    ],
+    "testFrameworks": [],
+    "packageManager": "npm"
+  },
+  "sensors": [
+    {
+      "id": "build",
+      "name": "Build",
+      "description": "Run package build script",
+      "severity": "critical",
+      "command": "npm run build",
+      "script": "build"
+    },
+    {
+      "id": "lint",
+      "name": "Lint",
+      "description": "Run package lint script",
+      "severity": "warning",
+      "command": "npm run lint",
+      "script": "lint"
+    }
+  ]
+}

@@ -7,3 +7,17 @@ coverage/
 .env*
 !.env.example
 scratch/
+
+# sessão de login do bot do WhatsApp (venom-bot) — nunca versionar
+tokens/
+
+# dotcontext runtime state
+.context/plans/
+.context/cache/semantic/
+.context/runtime/
+.context/**/archive/
+
+
+# cache do WhatsApp Web (whatsapp-web.js)
+.wwebjs_cache/
+.wwebjs_auth/

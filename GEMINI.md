@@ -84,3 +84,26 @@ Este documento serve como diretriz e memória de contexto para o projeto de fina
 - Ao recarregar a página (F5 ou refresh do navegador), o `App.tsx` restaura automaticamente a tela e o mês (`duarte_selected_month`) que estavam sendo visualizados, evitando o redirecionamento forçado para a dashboard.
 - Suporta também histórico do navegador (botões avançar/voltar via listener de `hashchange`).
 
+---
+
+## 🤖 Bot Inteligente de WhatsApp (`server/whatsapp/`)
+- **Objetivo & Arquitetura:**
+  - Processo de serviço independente executado via `npm run whatsapp-bot` (`server/whatsapp/bot.ts`). Não interfere no bundle da aplicação web (`server.ts` / Vercel), operando como daemon local ou em servidor sempre ativo.
+  - Conexão e autenticação geridas pelo `whatsapp-web.js` com persistência local em `./tokens/` (`LocalAuth`) e interface web auxiliar para escaneamento de QR Code na porta `3101` (`http://localhost:3101`).
+- **Segurança & Escopo de Atuação:**
+  - **Grupo Autorizado:** Processamento restrito exclusivamente ao grupo especificado na variável `WHATSAPP_GROUP_ID`. Mensagens privadas, outros grupos ou canais externos são ignorados silenciosamente.
+  - **Filtro de Backlog (Restart):** Mensagens enviadas antes do timestamp de inicialização do processo (`STARTED_AT`) são descartadas preventivamente para evitar duplicidade no reprocessamento do histórico ao reconectar.
+  - **Fila Serial de Mensagens:** Mensagens do grupo são processadas estritamente em fila FIFO sequencial para evitar condições de corrida (race conditions) em perguntas e confirmações.
+  - **Identificação de Remetente:** Identifica automaticamente o autor da mensagem via `WHATSAPP_OWNER_NAME` e demais membros via mapeamento `WHATSAPP_SENDER_MAP` (LID/telefone -> Nome).
+- **Formatos de Entrada Suportados:**
+  - **Fotos & Comprovantes:** Fotos de recibos de papel, NFC-e, filipetas de maquininhas POS e fotos de bombas de combustível/painel de carro analisados via Google Gemini Vision.
+  - **Áudios de Voz (PTT):** Transcrição e extração semântica direta de mensagens de voz pelo Google Gemini multimodal, sem necessidade de serviços externos de STT.
+  - **Texto Livre:** Identificação de linguagem natural cotidiana (ex: "gastei 55 reais no mercado", "abasteci 40 litros a 5.89 no posto Cristo Rei km 126950").
+- **Fluxo Conversacional & Confirmação:**
+  - **Perguntas de Lacunas:** Se faltar um dado essencial (ex: valor em abastecimento, odômetro inválido ou sem indício de local), o bot questiona o grupo e aguarda a resposta antes de prosseguir.
+  - **Confirmação Explícita / Rascunhos:** Toda despesa identificada é salva imediatamente como rascunho (`receipts` no Supabase) e apresentada no grupo solicitando "sim" / "não" para efetivação em despesa financeira (`transactions`) e registro veicular (`fuel_logs`).
+  - **Auto-confirmação / Persistência:** Rascunhos pendentes são restaurados na reinicialização do bot e podem ser auto-confirmados por inatividade ou aprovados manualmente no app web.
+- **Aprendizado Contínuo & Telemetria:**
+  - **Módulo de Conhecimento (`knowledge.ts`):** Consulta dinâmica ao banco para contextualizar o Gemini com nomes de postos habituais, locais frequentes, formas de pagamento favoritas e o último KM registrado no odômetro.
+  - **Proteção de Odômetro:** Validação contra KM retroativo ou saltos anômalos em relação ao último abastecimento registrado.
+

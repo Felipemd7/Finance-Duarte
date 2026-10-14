@@ -25,7 +25,7 @@ export const SUBCATEGORY_TAXONOMY: SubcategoryTaxonomyEntry[] = [
   { id: 'sub-supermercado', nome: 'Supermercado', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['supermercado', 'feira', 'frigor', 'atacado', 'mercado', 'hortifruti'] },
   { id: 'sub-combustivel', nome: 'Combustível', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['combust', 'gasolina', 'etanol', 'diesel', 'posto'] },
   { id: 'sub-farmacia', nome: 'Farmácia', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['farm', 'medic', 'saúde', 'saude', 'remedio', 'exame', 'droga'] },
-  { id: 'sub-lazer', nome: 'Lazer', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['lazer', 'restaurante', 'bar', 'jantar', 'lanchonete', 'cinema', 'pizzaria'] },
+  { id: 'sub-lazer', nome: 'Lazer', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['lazer', 'restaurante', 'bar', 'jantar', 'lanchonete', 'cinema', 'pizzaria', 'pastelaria', 'padaria', 'sorveteria', 'hamburgueria', 'açaiteria', 'acaiteria', 'fast food', 'lanche'] },
   { id: 'sub-luz', nome: 'Luz', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['luz', 'energia', 'eletrica', 'elétrica'] },
   { id: 'sub-agua', nome: 'Água', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['agua', 'água'] },
   { id: 'sub-gas', nome: 'Gás', categoriaId: 'cat-variavel', categoriaNome: 'Variável', keywords: ['gas', 'gás', 'botijao', 'botijão'] },
