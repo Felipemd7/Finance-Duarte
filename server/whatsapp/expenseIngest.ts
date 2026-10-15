@@ -29,7 +29,7 @@ import {
   parseFirstNumber,
   parseLitrosKm,
 } from './normalize';
-import { categoryNameForSubcategoryId, mapCategoryToId, subcategoryIdToName } from '../../src/shared/taxonomy';
+import { categoryNameForSubcategoryId, mapCategoryToId, subcategoryIdToName, SUBCATEGORY_TAXONOMY } from '../../src/shared/taxonomy';
 import type { Receipt, Transaction, PurchaseItem } from '../../src/types';
 
 const MAX_MEDIA_BASE64 = 15_000_000; // ~11 MB de arquivo
@@ -91,6 +91,17 @@ function formatDateBR(iso: string): string {
 // ───────────────────────── pós-processamento + lacunas ─────────────────────────
 
 /**
+ * Palavra-chave de outra subcategoria no próprio nome do lugar (ex.:
+ * "pastelaria" → sub-lazer) contradiz a subcategoria dada — usado para não
+ * confiar ciegamente em conhecimento aprendido quando ele conflita com o
+ * nome óbvio do estabelecimento (histórico pode ter lixo de testes).
+ */
+function nameContradictsSubcategory(nome: string, subcategoriaId: string): boolean {
+  const norm = nome.toLowerCase();
+  return SUBCATEGORY_TAXONOMY.some((entry) => entry.id !== subcategoriaId && entry.keywords.some((kw) => norm.includes(kw)));
+}
+
+/**
  * Padroniza o que a IA devolveu usando o conhecimento aprendido: nome
  * canônico do lugar, subcategoria confiável do histórico, forma de
  * pagamento padrão do grupo (cartão conjunto), data válida.
@@ -103,8 +114,13 @@ function postProcess(input: AnalyzedReceipt, k: Knowledge, channel: Channel): { 
   const place = a.estabelecimento && !isGenericAcquirerName(a.estabelecimento) ? matchPlace(k, a.estabelecimento) : undefined;
   if (place) {
     a.estabelecimento = place.nome;
-    if (place.reliable) a.subcategoria_id = place.subcategoriaId;
-    if (place.subcategoriaId === 'sub-combustivel' && place.reliable) {
+    // Combustível aprendido só sobrescreve se o próprio nome do lugar não
+    // contradizer isso (ex.: histórico com um registro de teste/errado
+    // marcando "Pastelaria X" como posto não deve forçar pergunta de litros/km
+    // numa despesa que claramente é lazer/lanche pelo nome do estabelecimento).
+    const fuelContradicted = place.subcategoriaId === 'sub-combustivel' && nameContradictsSubcategory(place.nome, 'sub-combustivel');
+    if (place.reliable && !fuelContradicted) a.subcategoria_id = place.subcategoriaId;
+    if (place.subcategoriaId === 'sub-combustivel' && place.reliable && !fuelContradicted) {
       a.tipoDespesa = 'combustivel';
       a.tipoEstabelecimento = 'Posto de combustível';
       a.subcategoria_id = 'sub-combustivel';
