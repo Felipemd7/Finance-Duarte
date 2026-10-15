@@ -557,12 +557,13 @@ REGRAS IMPORTANTES:
    a) "valorTotal" não foi mencionado nem é possível inferir;
    b) é abastecimento (tipoDespesa=combustivel) e "litros" não foi mencionado;
    c) é abastecimento e "kmAtual" não foi mencionado;
-   d) não foi dito onde foi a despesa — nem o nome do lugar NEM o tipo (mercado, posto, farmácia, restaurante...) — E também não dá pra inferir isso a partir do(s) item(ns) comprado(s) (ver REGRA 8). NUNCA deixe "estabelecimento" vazio ou genérico tipo "despesa" sem antes tentar essa pergunta OU inferir pela REGRA 8;
+   d) não foi dito o NOME do lugar/estabelecimento específico (ex.: "Pastelaria Cristo Rei", "Supermercado Carrefour") — mesmo que o TIPO já esteja claro pelo item comprado (ver REGRA 8), ainda falta o nome específico e isso justifica perguntar;
    e) a mensagem menciona itens de forma vaga sem dizer o quê, de um jeito que nem o valor nem a categoria dão pra inferir (ex.: "comprei umas coisas", "paguei uma conta").
-   Imprecisões menores (valor arredondado, estabelecimento/data aproximados) NÃO justificam pergunta — use "confianca":"baixa" pra isso.
+   Imprecisões menores (valor arredondado, data aproximada) NÃO justificam pergunta — use "confianca":"baixa" pra isso.
 6. Se for áudio e não der pra entender nada útil, devolva "entendiAudio": false e "ehDespesa": false (não invente).
 7. Se houver mais de uma despesa na mesma mensagem, devolva "multiplasDespesas": true e NÃO tente registrar só uma delas.
-8. Use seu conhecimento geral sobre o(s) ITEM(NS) comprado(s) pra preencher "tipoEstabelecimento" e "subcategoria_id" mesmo que a pessoa NÃO tenha dito o nome do lugar — isso conta como "local informado" pra REGRA 5d, dispensando a pergunta de onde foi. Exemplos: "coxinha", "salgados", "pastel", "esfiha", "sanduíche", "lanche", "pizza", "açaí" → comida de lanchonete/lazer (tipoEstabelecimento="Restaurante/Lazer", subcategoria_id="sub-lazer"); "pilha", "detergente", "sabão", "papel higiênico", "sabonete", "torneira", "lâmpada" → item doméstico comprado em mercado/bazar (tipoEstabelecimento="Supermercado", subcategoria_id="sub-supermercado"); remédio/exame → "Farmácia"/"sub-farmacia". Só pergunte o local quando o item em si for ambíguo demais pra classificar (ex.: "comprei uma bomba" pode ser bomba d'água, de encher pneu ou um doce — nesse caso sim, pergunte).`;
+8. Use seu conhecimento geral sobre o(s) ITEM(NS) comprado(s) pra preencher "tipoEstabelecimento" e "subcategoria_id" CORRETAMENTE mesmo que a pessoa não tenha dito o nome do lugar — isso evita classificar errado (ex.: nunca tratar uma compra de comida como combustível) e enquadra a pergunta da REGRA 5d/9 no tipo certo. Exemplos: "coxinha", "salgados", "pastel", "esfiha", "sanduíche", "lanche", "pizza", "açaí" → comida de lanchonete/lazer (tipoEstabelecimento="Restaurante/Lazer", subcategoria_id="sub-lazer"); "pilha", "detergente", "sabão", "papel higiênico", "sabonete", "torneira", "lâmpada" → item doméstico comprado em mercado/bazar (tipoEstabelecimento="Supermercado", subcategoria_id="sub-supermercado"); remédio/exame → "Farmácia"/"sub-farmacia". Isso NÃO substitui o nome específico do lugar (REGRA 5d) — deixe "estabelecimento" vazio quando a pessoa não disser o nome, mesmo sabendo o tipo.
+9. Quando for perguntar o nome do lugar (REGRA 5d) e você já souber o tipo pela REGRA 8, deixe a pergunta específica pro tipo em vez de genérica, ex.: "Qual foi a lanchonete/açaiteria desse açaí?" ou "Qual mercado você comprou a pilha e o detergente?" em vez de "onde foi essa despesa?".`;
 
 /** Data de hoje no fuso do casal (Teresina, UTC-3) — `toISOString()` usa UTC e já vira o dia às 21h. */
 function todayISO(): string {
@@ -612,19 +613,23 @@ function buildExpenseResult(parsed: any): ExpenseAnalysisResult {
   }
 
   // Trava de segurança (REGRA 5-d): não depender só do Gemini lembrar de
-  // perguntar — se não combustível e sem NENHUM indício de estabelecimento,
-  // força a pergunta em vez de deixar cair no rótulo genérico de rascunho.
-  // Mas se o próprio item comprado já deu uma subcategoria confiável (REGRA
-  // 8 — ex.: "coxinha" → sub-lazer), isso já conta como pista suficiente;
-  // "sub-eventualidades" não conta, pois é o próprio rótulo de "não sei".
+  // perguntar — se não for combustível e a pessoa não disse o NOME
+  // específico do estabelecimento, força a pergunta em vez de deixar cair
+  // num rótulo genérico de rascunho. O tipo/categoria (REGRA 8, ex.:
+  // "coxinha" → sub-lazer) já pode estar preenchido nesse ponto — isso evita
+  // classificar errado (ex.: pedir litros/km de uma despesa de lanche), mas
+  // não substitui o nome do lugar em si, que o casal quer manter nos
+  // relatórios.
   const isFuelCheck = parsed.tipoDespesa === 'combustivel';
-  const hasConfidentSubcategory = /^sub-/.test(parsed.subcategoria_id || '') && parsed.subcategoria_id !== 'sub-eventualidades';
-  if (!isFuelCheck && !parsed.estabelecimento?.trim() && !parsed.tipoEstabelecimento?.trim() && !hasConfidentSubcategory) {
+  if (!isFuelCheck && !parsed.estabelecimento?.trim()) {
     const valorParcial = parsed.valorTotal ? ` de R$ ${Number(parsed.valorTotal).toFixed(2)}` : '';
+    const tipoHint = parsed.tipoEstabelecimento?.trim();
     return {
       kind: 'question',
-      pergunta: 'Onde foi essa despesa (nome do lugar ou tipo, ex.: mercado, farmácia, restaurante)?',
-      contextoParcial: `Despesa${valorParcial} sem local informado.`,
+      pergunta: tipoHint
+        ? `Qual foi o nome do lugar (${tipoHint}) dessa despesa${valorParcial}?`
+        : 'Onde foi essa despesa (nome do lugar ou tipo, ex.: mercado, farmácia, restaurante)?',
+      contextoParcial: `Despesa${valorParcial}${tipoHint ? ` (${tipoHint})` : ''} sem nome do estabelecimento.`,
     };
   }
 
