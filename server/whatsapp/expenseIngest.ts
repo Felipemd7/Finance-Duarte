@@ -146,7 +146,18 @@ function findGap(a: AnalyzedReceipt, k: Knowledge): Gap | undefined {
   if (!(a.valorTotal > 0)) return { fields: ['valorTotal'], pergunta: 'Qual foi o valor total dessa despesa?' };
 
   if (isGenericAcquirerName(a.estabelecimento)) {
-    const hint = suggestPlace(k, a.valorTotal, a.tipoDespesa === 'combustivel' ? 'sub-combustivel' : undefined);
+    // Restringe a sugestão por valor à MESMA subcategoria já identificada
+    // (ex.: lazer), quando houver uma confiável — sem isso, `suggestPlace`
+    // batia só pelo valor e podia sugerir qualquer lugar do histórico com
+    // preço parecido (ex.: associar um lanche de R$9,40 a uma corrida de
+    // Uber de valor coincidente, mesmo sendo categorias sem nada a ver).
+    const preferSub =
+      a.tipoDespesa === 'combustivel'
+        ? 'sub-combustivel'
+        : a.subcategoria_id && a.subcategoria_id !== 'sub-eventualidades'
+        ? a.subcategoria_id
+        : undefined;
+    const hint = suggestPlace(k, a.valorTotal, preferSub);
     return hint
       ? {
           fields: ['estabelecimento'],
@@ -410,9 +421,15 @@ async function handleAnalysisResult(
       return;
     case 'question':
       await replyInGroup(message, `❓ ${result.pergunta}`);
-      addPendingQuestion(message.from, result.contextoParcial, result.pergunta, async () => {
-        await sendToChat(client, message.from, '⌛ Não recebi mais detalhes, vou deixar essa de lado. Pode mandar de novo com as informações completas.');
-      });
+      addPendingQuestion(
+        message.from,
+        result.contextoParcial,
+        result.pergunta,
+        async () => {
+          await sendToChat(client, message.from, '⌛ Não recebi mais detalhes, vou deixar essa de lado. Pode mandar de novo com as informações completas.');
+        },
+        { origemTexto: ctx.channel === 'text' ? ctx.origemTexto : '' }
+      );
       return;
     case 'expense':
       await finishExpense(client, message, result.receipt, senderName, ctx, round);
@@ -439,7 +456,14 @@ export async function resolvePendingQuestion(client: Client, message: Message): 
   }
 
   // Pergunta do Gemini (texto/áudio): reanalisa combinando contexto + resposta.
-  const combinedText = `${pending.contextoParcial}. Informação adicional perguntada ("${pending.pergunta}"): ${reply}`;
+  // Prioriza o texto ORIGINAL da mensagem (ex.: "coxinha de catupiry") sobre o
+  // resumo em `contextoParcial` — o resumo é gerado pelo próprio Gemini e pode
+  // perder detalhes do item comprado que a REGRA 8 do prompt precisa pra
+  // classificar a despesa sem pedir local; sem o texto original, a reanálise
+  // "esquecia" que era uma compra de lanche e voltava a perguntar onde foi.
+  const combinedText = pending.origemTexto
+    ? `Mensagem original: "${pending.origemTexto}". Resposta à pergunta ("${pending.pergunta}"): ${reply}`
+    : `${pending.contextoParcial}. Informação adicional perguntada ("${pending.pergunta}"): ${reply}`;
   let result: ExpenseAnalysisResult;
   try {
     result = await analyzeTextExpense(combinedText, { knowledgeBlock: await knowledgePromptBlock() });

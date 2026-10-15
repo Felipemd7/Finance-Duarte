@@ -20,6 +20,16 @@ export interface PendingQuestion {
   chatId: string;
   /** Contexto da mensagem original para reanálise textual (perguntas vindas do Gemini). */
   contextoParcial: string;
+  /**
+   * Texto literal da mensagem original (quando veio de texto), ex.: "coxinha
+   * de catupiry". Preservado à parte do resumo em `contextoParcial` porque o
+   * resumo gerado pelo Gemini pode perder detalhes que a REGRA 8 do prompt
+   * (classificar pelo item comprado) precisa pra funcionar de novo na
+   * reanálise — sem isso, perguntar "quanto custou?" e depois reanalisar só
+   * com o resumo fazia o bot esquecer que "coxinha" é lazer e voltar a
+   * perguntar o local. Vazio/'(áudio)' quando não há texto literal (áudio).
+   */
+  origemTexto: string;
   pergunta: string;
   createdAt: number;
   timer: NodeJS.Timeout;
@@ -40,7 +50,7 @@ export function addPendingQuestion(
   contextoParcial: string,
   pergunta: string,
   onTimeout: () => void,
-  opts: { round?: number; fill?: PendingQuestion['fill'] } = {}
+  opts: { round?: number; fill?: PendingQuestion['fill']; origemTexto?: string } = {}
 ): PendingQuestion {
   // Só uma pergunta pendente por chat — uma nova substitui a anterior.
   removePendingQuestion(chatId);
@@ -53,6 +63,7 @@ export function addPendingQuestion(
   const pending: PendingQuestion = {
     chatId,
     contextoParcial,
+    origemTexto: opts.origemTexto ?? '',
     pergunta,
     createdAt: Date.now(),
     timer,
