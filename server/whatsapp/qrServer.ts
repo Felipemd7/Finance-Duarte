@@ -53,7 +53,19 @@ export function startQrServer(port: number): void {
     res.json({ status: getStatus(), hasQr: Boolean(getQr()) });
   });
 
-  app.listen(port, () => {
-    console.log(`[WhatsApp] Painel de conexão disponível em http://localhost:${port}`);
+  // Essa página não tem senha nenhuma — qualquer um que chegue nela vê o QR
+  // Code (e poderia parear o próprio WhatsApp no bot) e o status da conexão.
+  // No PC local isso nunca foi um risco (nada de fora chega). Numa VPS
+  // pública, escutar em todas as interfaces (0.0.0.0, padrão do Express
+  // quando não se passa host) exporia isso pra internet inteira. Por
+  // padrão só escuta em loopback; acesse via túnel SSH
+  // (`ssh -L PORTA:localhost:PORTA usuario@servidor`) e abra
+  // http://localhost:PORTA normalmente. WHATSAPP_QR_BIND_ALL=true volta
+  // ao comportamento antigo pra quem realmente precisa expor direto.
+  const bindAll = process.env.WHATSAPP_QR_BIND_ALL === 'true';
+  const host = bindAll ? '0.0.0.0' : '127.0.0.1';
+
+  app.listen(port, host, () => {
+    console.log(`[WhatsApp] Painel de conexão disponível em http://localhost:${port}${bindAll ? ' (exposto em todas as interfaces — WHATSAPP_QR_BIND_ALL=true)' : ' (só localhost — use um túnel SSH se estiver numa VPS)'}`);
   });
 }
