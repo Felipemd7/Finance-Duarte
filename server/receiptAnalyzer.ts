@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { normalizeReceiptData } from '../src/services/receiptNormalizer.js';
-import { buildTaxonomyPromptBlock, mapCategoryToId } from '../src/shared/taxonomy.js';
+import { buildTaxonomyPromptBlock, mapCategoryToId, subcategoryIdToName } from '../src/shared/taxonomy.js';
 import { supabaseServer, isSupabaseServerConfigured } from './supabase.js';
 
 /**
@@ -557,11 +557,12 @@ REGRAS IMPORTANTES:
    a) "valorTotal" não foi mencionado nem é possível inferir;
    b) é abastecimento (tipoDespesa=combustivel) e "litros" não foi mencionado;
    c) é abastecimento e "kmAtual" não foi mencionado;
-   d) não foi dito onde foi a despesa — nem o nome do lugar NEM o tipo (mercado, posto, farmácia, restaurante...). Um tipo genérico já é suficiente pra não precisar perguntar; só pergunte quando não há pista ALGUMA de local. NUNCA deixe "estabelecimento" vazio ou genérico tipo "despesa" sem antes tentar essa pergunta;
-   e) a mensagem menciona itens de forma vaga sem dizer o quê (ex.: "comprei uns lanches", "umas coisas no mercado").
+   d) não foi dito onde foi a despesa — nem o nome do lugar NEM o tipo (mercado, posto, farmácia, restaurante...) — E também não dá pra inferir isso a partir do(s) item(ns) comprado(s) (ver REGRA 8). NUNCA deixe "estabelecimento" vazio ou genérico tipo "despesa" sem antes tentar essa pergunta OU inferir pela REGRA 8;
+   e) a mensagem menciona itens de forma vaga sem dizer o quê, de um jeito que nem o valor nem a categoria dão pra inferir (ex.: "comprei umas coisas", "paguei uma conta").
    Imprecisões menores (valor arredondado, estabelecimento/data aproximados) NÃO justificam pergunta — use "confianca":"baixa" pra isso.
 6. Se for áudio e não der pra entender nada útil, devolva "entendiAudio": false e "ehDespesa": false (não invente).
-7. Se houver mais de uma despesa na mesma mensagem, devolva "multiplasDespesas": true e NÃO tente registrar só uma delas.`;
+7. Se houver mais de uma despesa na mesma mensagem, devolva "multiplasDespesas": true e NÃO tente registrar só uma delas.
+8. Use seu conhecimento geral sobre o(s) ITEM(NS) comprado(s) pra preencher "tipoEstabelecimento" e "subcategoria_id" mesmo que a pessoa NÃO tenha dito o nome do lugar — isso conta como "local informado" pra REGRA 5d, dispensando a pergunta de onde foi. Exemplos: "coxinha", "salgados", "pastel", "esfiha", "sanduíche", "lanche", "pizza", "açaí" → comida de lanchonete/lazer (tipoEstabelecimento="Restaurante/Lazer", subcategoria_id="sub-lazer"); "pilha", "detergente", "sabão", "papel higiênico", "sabonete", "torneira", "lâmpada" → item doméstico comprado em mercado/bazar (tipoEstabelecimento="Supermercado", subcategoria_id="sub-supermercado"); remédio/exame → "Farmácia"/"sub-farmacia". Só pergunte o local quando o item em si for ambíguo demais pra classificar (ex.: "comprei uma bomba" pode ser bomba d'água, de encher pneu ou um doce — nesse caso sim, pergunte).`;
 
 /** Data de hoje no fuso do casal (Teresina, UTC-3) — `toISOString()` usa UTC e já vira o dia às 21h. */
 function todayISO(): string {
@@ -613,8 +614,12 @@ function buildExpenseResult(parsed: any): ExpenseAnalysisResult {
   // Trava de segurança (REGRA 5-d): não depender só do Gemini lembrar de
   // perguntar — se não combustível e sem NENHUM indício de estabelecimento,
   // força a pergunta em vez de deixar cair no rótulo genérico de rascunho.
+  // Mas se o próprio item comprado já deu uma subcategoria confiável (REGRA
+  // 8 — ex.: "coxinha" → sub-lazer), isso já conta como pista suficiente;
+  // "sub-eventualidades" não conta, pois é o próprio rótulo de "não sei".
   const isFuelCheck = parsed.tipoDespesa === 'combustivel';
-  if (!isFuelCheck && !parsed.estabelecimento?.trim() && !parsed.tipoEstabelecimento?.trim()) {
+  const hasConfidentSubcategory = /^sub-/.test(parsed.subcategoria_id || '') && parsed.subcategoria_id !== 'sub-eventualidades';
+  if (!isFuelCheck && !parsed.estabelecimento?.trim() && !parsed.tipoEstabelecimento?.trim() && !hasConfidentSubcategory) {
     const valorParcial = parsed.valorTotal ? ` de R$ ${Number(parsed.valorTotal).toFixed(2)}` : '';
     return {
       kind: 'question',
@@ -643,12 +648,13 @@ function buildExpenseResult(parsed: any): ExpenseAnalysisResult {
     kind: 'expense',
     receipt: {
       // Se não veio um nome específico, usa o tipo de estabelecimento já
-      // informado (ex.: "Supermercado") em vez de um rótulo genérico tipo
-      // "Despesa via WhatsApp" — a trava de segurança acima já garante
-      // que chegou aqui com pelo menos um dos dois preenchido (ou é
-      // combustível). "WPP" é só o último recurso, nunca deveria ocorrer.
-      estabelecimento: parsed.estabelecimento || parsed.tipoEstabelecimento || (isFuel ? 'Posto de Combustível' : 'WPP'),
-      tipoEstabelecimento: parsed.tipoEstabelecimento || (isFuel ? 'Posto de combustível' : 'Outros'),
+      // informado (ex.: "Supermercado") ou, na falta dele, o nome da própria
+      // subcategoria inferida pelo item (REGRA 8 — ex.: "Lazer" pra
+      // "coxinha") em vez de um rótulo genérico tipo "Despesa via WhatsApp".
+      // "WPP" é só o último recurso, nunca deveria ocorrer de fato.
+      estabelecimento:
+        parsed.estabelecimento || parsed.tipoEstabelecimento || (isFuel ? 'Posto de Combustível' : subcategoryIdToName(subcategoriaId)) || 'WPP',
+      tipoEstabelecimento: parsed.tipoEstabelecimento || (isFuel ? 'Posto de combustível' : subcategoryIdToName(subcategoriaId)),
       categoria_id: categoriaId,
       subcategoria_id: isFuel ? 'sub-combustivel' : subcategoriaId,
       data: sanitizeDate(parsed.data),
