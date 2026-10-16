@@ -70,8 +70,17 @@ async function handleMessage(client: Parameters<typeof resolvePendingQuestion>[0
 
     // Log de diagnóstico: toda mensagem chega aqui ANTES de qualquer
     // filtro, para sabermos no terminal o que está realmente passando.
+    //
+    // TEMPORÁRIO (investigação do incidente de 2026-10-16): `message.from`
+    // pra mensagens ENVIADAS PELO PRÓPRIO BOT (fromMe=true) numa mensagem de
+    // GRUPO não reporta o grupo de destino — reporta a identidade da própria
+    // conta, igual em QUALQUER grupo. Foi por isso que uma mensagem digitada
+    // num grupo pessoal não-relacionado ("Louvor AD Cristo Rei") bateu
+    // incorretamente com WHATSAPP_GROUP_ID. Logando `to` e `id.remote`
+    // também pra achar qual campo realmente distingue os grupos.
+    const remote = (message.id as any)?.remote;
     console.log(
-      `[WhatsApp] message_create recebida — type=${message.type} from=${message.from} author=${message.author || '(nenhum)'} fromMe=${message.fromMe} body="${(message.body || '').slice(0, 40)}"`
+      `[WhatsApp] message_create recebida — type=${message.type} from=${message.from} to=${message.to || '(nenhum)'} id.remote=${remote || '(nenhum)'} author=${message.author || '(nenhum)'} fromMe=${message.fromMe} body="${(message.body || '').slice(0, 40)}"`
     );
 
     // Regra única e auditável: só processa mensagens do grupo autorizado.
