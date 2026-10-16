@@ -68,28 +68,29 @@ async function handleMessage(client: Parameters<typeof resolvePendingQuestion>[0
     // barata (sem round-trip ao navegador), por isso vem primeiro.
     if (message.timestamp < STARTED_AT) return;
 
-    // Log de diagnóstico: toda mensagem chega aqui ANTES de qualquer
-    // filtro, para sabermos no terminal o que está realmente passando.
-    //
-    // TEMPORÁRIO (investigação do incidente de 2026-10-16): `message.from`
-    // pra mensagens ENVIADAS PELO PRÓPRIO BOT (fromMe=true) numa mensagem de
-    // GRUPO não reporta o grupo de destino — reporta a identidade da própria
-    // conta, igual em QUALQUER grupo. Foi por isso que uma mensagem digitada
-    // num grupo pessoal não-relacionado ("Louvor AD Cristo Rei") bateu
-    // incorretamente com WHATSAPP_GROUP_ID. Logando `to` e `id.remote`
-    // também pra achar qual campo realmente distingue os grupos.
-    const remote = (message.id as any)?.remote;
+    // ID do chat real da mensagem — NUNCA `message.from`: pra mensagens
+    // enviadas pela PRÓPRIA conta do bot (fromMe=true) dentro de um grupo,
+    // `from` reporta a identidade da conta (igual em QUALQUER grupo que ela
+    // participe), não o grupo de destino. Incidente real (2026-10-16): uma
+    // mensagem digitada num grupo pessoal não-relacionado bateu com
+    // WHATSAPP_GROUP_ID porque esse valor era, na verdade, a identidade do
+    // Felipe, não um ID de grupo. `message.id.remote` é o único campo que se
+    // mantém como o ID do grupo tanto em mensagens recebidas quanto enviadas
+    // pela própria conta — confirmado comparando os dois casos lado a lado.
+    const chatId = (message.id as any)?.remote || message.from;
+
+    // Log de diagnóstico: toda mensagem chega aqui ANTES de qualquer filtro,
+    // para sabermos no terminal o que está realmente passando.
     console.log(
-      `[WhatsApp] message_create recebida — type=${message.type} from=${message.from} to=${message.to || '(nenhum)'} id.remote=${remote || '(nenhum)'} author=${message.author || '(nenhum)'} fromMe=${message.fromMe} body="${(message.body || '').slice(0, 40)}"`
+      `[WhatsApp] message_create recebida — chatId=${chatId} author=${message.author || '(nenhum)'} fromMe=${message.fromMe} body="${(message.body || '').slice(0, 40)}"`
     );
 
     // Regra única e auditável: só processa mensagens do grupo autorizado.
     // Qualquer outro chat/número é ignorado silenciosamente — o bot nunca
     // lê, responde ou envia nada fora desse grupo.
     //
-    // `message.author` só existe em mensagens de grupo (é quem enviou,
-    // diferente de `message.from`, que ali é o id do grupo). Evitamos
-    // `message.getChat()`/`chat.isGroup` de propósito: fazem um
+    // `message.author` só existe em mensagens de grupo (é quem enviou).
+    // Evitamos `message.getChat()`/`chat.isGroup` de propósito: fazem um
     // round-trip ao WhatsApp Web dentro do navegador que se mostrou
     // instável para chats no formato novo "@lid", lançando erro.
     if (!message.author) {
@@ -98,12 +99,12 @@ async function handleMessage(client: Parameters<typeof resolvePendingQuestion>[0
     }
 
     if (!GROUP_ID) {
-      console.log('[WhatsApp] chatId recebido (copie para WHATSAPP_GROUP_ID se for o grupo certo):', message.from);
+      console.log('[WhatsApp] chatId recebido (copie para WHATSAPP_GROUP_ID se for o grupo certo):', chatId);
       return;
     }
 
-    if (message.from !== GROUP_ID) {
-      console.log(`[WhatsApp] Ignorado: grupo "${message.from}" não é o autorizado ("${GROUP_ID}").`);
+    if (chatId !== GROUP_ID) {
+      console.log(`[WhatsApp] Ignorado: grupo "${chatId}" não é o autorizado ("${GROUP_ID}").`);
       return;
     }
 

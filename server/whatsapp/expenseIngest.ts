@@ -49,8 +49,20 @@ async function replyInGroup(message: Message, text: string): Promise<void> {
     // Mensagem "velha" ligada a um cliente que foi reiniciado (watchdog/reconexão):
     // responde sem citar, pelo cliente ativo.
     console.warn('[WhatsApp] message.reply falhou, enviando sem citar:', err?.message || err);
-    await sendToChat(getActiveClient() as Client, message.from, text);
+    await sendToChat(getActiveClient() as Client, chatIdOf(message), text);
   }
+}
+
+/**
+ * ID do grupo/chat da mensagem — NUNCA `message.from` sozinho: pra
+ * mensagens enviadas pela PRÓPRIA conta do bot (fromMe=true) dentro de um
+ * grupo, `from` reporta a identidade da conta, igual em QUALQUER grupo que
+ * ela participe, não o grupo de destino (ver bot.ts para o incidente real
+ * que isso causou). `message.id.remote` é o único campo confirmado como
+ * estável em ambos os sentidos (mensagem recebida ou enviada pela conta).
+ */
+function chatIdOf(message: Message): string {
+  return (message.id as any)?.remote || message.from;
 }
 
 /** Envia ao chat pelo cliente ATIVO (o passado pode ter sido reiniciado entre o agendamento e o disparo do timer). */
@@ -346,7 +358,7 @@ async function createDraftAndAsk(
   const duplicate = await findDuplicate(receipt.valorTotal, receipt.data, receipt.estabelecimento);
   await replyInGroup(message, confirmationMessage(receipt, a, senderName, buildWarnings(a, place, k, duplicate)));
 
-  addPending({ receiptId: receipt.id, chatId: message.from, receipt, transaction }, autoConfirm(client));
+  addPending({ receiptId: receipt.id, chatId: chatIdOf(message), receipt, transaction }, autoConfirm(client));
 }
 
 interface Ctx {
@@ -359,16 +371,16 @@ interface Ctx {
 async function askGap(client: Client, message: Message, a: AnalyzedReceipt, gap: Gap, ctx: Ctx, round: number, senderName: string): Promise<void> {
   await replyInGroup(message, `❓ ${gap.pergunta}`);
   addPendingQuestion(
-    message.from,
+    chatIdOf(message),
     '',
     gap.pergunta,
     async () => {
       const k = await getKnowledge();
       if (!(a.valorTotal > 0)) {
-        await sendToChat(client, message.from, '⌛ Não recebi o valor, vou deixar essa de lado. Pode mandar de novo com o valor incluído.');
+        await sendToChat(client, chatIdOf(message), '⌛ Não recebi o valor, vou deixar essa de lado. Pode mandar de novo com o valor incluído.');
         return;
       }
-      await sendToChat(client, message.from, '⌛ Não recebi a resposta, vou registrar com o que tenho. Você pode completar no app depois.');
+      await sendToChat(client, chatIdOf(message), '⌛ Não recebi a resposta, vou registrar com o que tenho. Você pode completar no app depois.');
       const { analyzed, place } = postProcess(a, k, ctx.channel);
       await createDraftAndAsk(client, message, analyzed, place, k, senderName, ctx.origemTexto, ctx.imagemUrl);
     },
@@ -422,11 +434,11 @@ async function handleAnalysisResult(
     case 'question':
       await replyInGroup(message, `❓ ${result.pergunta}`);
       addPendingQuestion(
-        message.from,
+        chatIdOf(message),
         result.contextoParcial,
         result.pergunta,
         async () => {
-          await sendToChat(client, message.from, '⌛ Não recebi mais detalhes, vou deixar essa de lado. Pode mandar de novo com as informações completas.');
+          await sendToChat(client, chatIdOf(message), '⌛ Não recebi mais detalhes, vou deixar essa de lado. Pode mandar de novo com as informações completas.');
         },
         { origemTexto: ctx.channel === 'text' ? ctx.origemTexto : '' }
       );
@@ -440,10 +452,10 @@ async function handleAnalysisResult(
 
 /** Tenta tratar a mensagem como resposta a uma pergunta pendente do chat. */
 export async function resolvePendingQuestion(client: Client, message: Message): Promise<boolean> {
-  const pending = getPendingQuestion(message.from);
+  const pending = getPendingQuestion(chatIdOf(message));
   if (!pending || !message.body?.trim()) return false;
 
-  removePendingQuestion(message.from);
+  removePendingQuestion(chatIdOf(message));
   const senderName = resolveSenderName(message);
   const reply = message.body.trim();
 
@@ -489,7 +501,7 @@ export async function resolvePendingQuestion(client: Client, message: Message): 
 
 /** "sim"/"não" a uma confirmação pendente. `true` = a mensagem foi tratada como confirmação. */
 export async function resolvePendingConfirmation(message: Message): Promise<boolean> {
-  const pending = getOldestPending(message.from);
+  const pending = getOldestPending(chatIdOf(message));
   if (!pending) return false;
 
   const body = (message.body || '').trim();
